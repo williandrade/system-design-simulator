@@ -43,11 +43,11 @@ PORT=3001 npm start --prefix backend
 npm start --prefix frontend -- --host 127.0.0.1
 ```
 
-Open [the Architect playground](http://localhost:4200/playground?mode=architect) in a test browser profile. Select **Add new canvas**, then **MCP** to open the pairing panel. Keep the empty canvas visible throughout the run.
+Open [the Architect playground](http://localhost:4200/playground?mode=architect) in a test browser profile. Select **Add new canvas**, then **MCP → Pair** to open the pairing form. Keep the empty canvas visible throughout the run.
 
 ## Deterministic SDK demonstration
 
-Run the following command in an interactive terminal. Paste the one-time pairing code into **Pairing code** and select **Pair canvas**. The code goes to the local terminal directly. To collect the JSONL trace, redirect stdout and leave the terminal available for pairing.
+Run the following command in an interactive terminal. Paste the one-time pairing code into **Pairing code** and select **Pair**. The code goes to the local terminal directly. To collect the JSONL trace, redirect stdout and leave the terminal available for pairing.
 
 ```sh
 node mcp/scripts/demo/index.mjs run .brain/evidencias/BASE-01/real-time-messaging-app.json
@@ -63,7 +63,7 @@ In another empty canvas, run `node mcp/scripts/demo/index.mjs burst`. The runner
 
 ## LLM demonstration with Claude Code
 
-The browser QA used Claude Code 2.1.331 with existing local authentication. The CLI runs in a disposable directory with only the seven simulator MCP tools available. Prepare the empty canvas and open its MCP panel before running this block from the repository root in an interactive terminal. Paste the one-time code into the masked **Pairing code** field, select **Pair canvas**, and start recording after the field clears.
+The browser QA used Claude Code 2.1.331 with existing local authentication. The CLI runs in a disposable directory with only the seven simulator MCP tools available. Prepare the empty canvas and open **MCP → Pair** before running this block from the repository root in an interactive terminal. Paste the one-time code into the masked **Pairing code** field, select **Pair**, and start recording after the field clears.
 
 ```sh
 (

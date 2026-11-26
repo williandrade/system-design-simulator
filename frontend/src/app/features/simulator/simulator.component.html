@@ -232,23 +232,43 @@
       <section id="mcp-connection-panel" class="mcp-panel" aria-label="MCP connection">
         <strong>MCP connection</strong>
         @if (mcp.status === 'disconnected') {
-          <form (submit)="pairMcpCanvas($event, pairingCode)">
-            <label>
-              Pairing code
-              <input
-                #pairingCode
-                type="password"
-                name="mcp-pairing-code"
-                maxlength="128"
-                autocomplete="off"
-                spellcheck="false"
-                required
-              />
-            </label>
-            <button type="submit">Pair canvas</button>
-          </form>
+          @if (desktopMcpSetupAvailable || !showMcpPairing) {
+            <div class="mcp-actions">
+              @if (desktopMcpSetupAvailable) {
+                <app-mcp-setup />
+              }
+              @if (!showMcpPairing) {
+                <button type="button" (click)="showMcpPairing = true">Pair</button>
+              }
+            </div>
+          }
+          @if (showMcpPairing) {
+            <form (submit)="pairMcpCanvas($event, pairingCode)">
+              <label>
+                Prompt for your MCP client
+                <textarea readonly rows="3">Call get_canvas_pairing on system-design-simulator and show me the one-time code.</textarea>
+              </label>
+              <label>
+                Pairing code
+                <input
+                  #pairingCode
+                  type="password"
+                  name="mcp-pairing-code"
+                  maxlength="128"
+                  autocomplete="off"
+                  spellcheck="false"
+                  required
+                />
+              </label>
+              <button type="submit">Pair</button>
+            </form>
+            <p>Switching clients? Close the previous client's MCP server before requesting a new code.</p>
+          }
         } @else {
           <button type="button" (click)="mcp.disconnect()">Disconnect</button>
+          @if (mcp.status === 'connected' && !mcp.lastAction) {
+            <p>Ask your client to call <code>get_canvas_state</code> before editing. Keep this window visible.</p>
+          }
         }
         <p
           role="status"

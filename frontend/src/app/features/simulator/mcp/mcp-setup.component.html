@@ -1,0 +1,106 @@
+<button #configureButton type="button" aria-haspopup="dialog" (click)="open(configureDialog)">
+  Configure
+</button>
+
+<dialog #configureDialog aria-labelledby="mcp-configure-title" (close)="configureButton.focus()">
+  <header>
+    <h2 id="mcp-configure-title">Configure MCP</h2>
+    <button type="button" (click)="configureDialog.close()">Close</button>
+  </header>
+
+  <fieldset aria-label="MCP client">
+    <label>
+      <input
+        type="radio"
+        name="mcp-client"
+        [checked]="client() === 'codex'"
+        (change)="client.set('codex')"
+      />
+      Codex
+    </label>
+    <label>
+      <input
+        type="radio"
+        name="mcp-client"
+        [checked]="client() === 'claude'"
+        (change)="client.set('claude')"
+      />
+      Claude
+    </label>
+  </fieldset>
+
+  @if (setup(); as setup) {
+    @if (client() === 'codex') {
+      <h3>Codex CLI</h3>
+      <p>For first-time setup, run this command in Terminal and start a new local Codex session.</p>
+    } @else {
+      <h3>Claude Code</h3>
+      <p>
+        Run this command in Terminal to register the server for your user across projects on this
+        Mac. Start a new local session in Claude Code or in the Claude Desktop Code tab. In the CLI,
+        use <code>/mcp</code> to check the server.
+      </p>
+    }
+
+    <button type="button" [disabled]="copying()" (click)="copyCommand()">Copy setup command</button>
+    <output role="status">{{
+      copyResult()?.client === client() ? copyResult()?.message : ''
+    }}</output>
+    <textarea
+      aria-label="Setup command"
+      readonly
+      rows="3"
+      [value]="setup.commands[client()]"
+    ></textarea>
+
+    @if (client() === 'codex') {
+      <details>
+        <summary>Codex desktop</summary>
+        <p>
+          In <strong>Settings → MCP servers → Add server</strong>, choose <strong>STDIO</strong>.
+          Name the server <code>system-design-simulator</code>, use this path as its command, and
+          leave arguments empty. Save and restart the Codex client when prompted.
+        </p>
+        <textarea
+          aria-label="Launcher path"
+          readonly
+          rows="2"
+          [value]="setup.launcherPath"
+        ></textarea>
+      </details>
+      <p>
+        If you moved the app, update only the command in the existing server entry to keep its tool
+        and approval settings.
+      </p>
+    } @else {
+      <details>
+        <summary>Claude Desktop Chat</summary>
+        <p>
+          Add only the <code>system-design-simulator</code> entry under <code>mcpServers</code> in
+          <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>. Keep
+          existing entries. If the file does not exist, use the entire example.
+        </p>
+        <textarea
+          aria-label="Claude Desktop Chat configuration"
+          readonly
+          rows="8"
+          [value]="claudeChatConfig()"
+        ></textarea>
+        <p>
+          Quit and reopen Claude Desktop, then look for the server in <strong>Connectors</strong>.
+        </p>
+      </details>
+      <p>
+        If you moved the app, update only the command in the existing entry. In Claude Code,
+        <code>claude mcp get system-design-simulator</code> shows which configuration is in use.
+      </p>
+    }
+    <p>Then return to <strong>MCP → Pair</strong> to connect your canvas.</p>
+  } @else if (setup() === undefined) {
+    <p role="status">Checking the bundled MCP launcher…</p>
+  } @else {
+    <p role="status">
+      The MCP launcher is unavailable. Reopen an intact copy of the app or rebuild it.
+    </p>
+  }
+</dialog>

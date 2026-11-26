@@ -201,16 +201,11 @@ In Finder, open `desktop/dist/System Design Simulator-darwin-arm64/`. Copy `Syst
 
 The app has its own project storage. To migrate a browser project, export its JSON from the browser and import it in the desktop app.
 
-#### Connect Claude Code to the desktop canvas
+#### Connect Codex or Claude to the desktop canvas
 
-With the app in `~/Applications`, run the command below to add the bundled MCP server to your Claude Code user configuration. Adjust the path if you install the app elsewhere. The launcher uses the Node runtime inside the bundle and runs independently of the checkout.
+Open an Architect canvas and select **MCP → Configure**. Choose **Codex** or **Claude**. The app shows the setup command for its bundled launcher, with instructions for using Codex desktop or Claude Desktop Chat. Run the copied command for first-time CLI setup. If you move the app, update the launcher path in the existing entry to keep your tool settings.
 
-```bash
-claude mcp add --transport stdio --scope user system-design-simulator -- \
-  "$HOME/Applications/System Design Simulator.app/Contents/Resources/simulator/system-design-simulator-mcp"
-```
-
-Open the Architect canvas, select **MCP**, and ask Claude Code to call `get_canvas_pairing`. Paste the one-time code in the app and select **Pair canvas**. Keep the canvas visible while Claude edits it. Only one local MCP process can listen on port `4301` at a time. [MCP tools and development workflow](mcp/README.md)
+Open a new local client session and select **MCP → Pair**. Follow the prompt to request a one-time code, enter it in the app, and select **Pair**. Ask the client to call `get_canvas_state` before it edits the canvas and keep the window visible during edits. When switching clients, stop the previous client's relay process to free port `4301`. [MCP tools and development workflow](mcp/README.md)
 
 ---
 

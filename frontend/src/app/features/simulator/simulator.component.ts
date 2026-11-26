@@ -88,6 +88,7 @@ import { Challenge } from '../../core/models/challenge.model';
 import { ChallengePanelComponent } from './challenge/challenge-panel.component';
 import { OnboardingOverlayComponent } from './challenge/onboarding-overlay.component';
 import { CanvasMcpConnection } from './mcp/canvas-mcp-connection';
+import { McpSetupComponent } from './mcp/mcp-setup.component';
 import {
   CanvasActionMarker,
   CanvasRequest,
@@ -137,6 +138,7 @@ interface SelectField {
     FormsModule,
     ChallengePanelComponent,
     OnboardingOverlayComponent,
+    McpSetupComponent,
   ],
   templateUrl: './simulator.component.html',
   styleUrls: ['./simulator.component.css'],
@@ -157,6 +159,8 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly changes = inject(ChangeDetectorRef);
 
   showMcpPanel = false;
+  showMcpPairing = false;
+  readonly desktopMcpSetupAvailable = typeof window !== 'undefined' && !!window.simulatorMcpSetup;
   private mcpFocus?: Point;
   readonly mcp = new CanvasMcpConnection({
     activeCanvasId: () => (this.mcpAvailable ? this.tabs[this.activeTabIndex]?.id : undefined),
@@ -167,6 +171,9 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLDivElement>;
   @ViewChild('flowCanvas') flowCanvas?: FCanvasComponent;
+  @ViewChild('pairingCode') set pairingCode(ref: ElementRef<HTMLInputElement> | undefined) {
+    if (ref) queueMicrotask(() => ref.nativeElement.focus());
+  }
 
   // Modal focus management: move focus into a dialog when it opens and restore it on close.
   // The refs live inside *ngIf overlays, so the setters fire on open (element present) and close
@@ -2557,6 +2564,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   onKeydown(event: KeyboardEvent): void {
     const mod = event.ctrlKey || event.metaKey;
     const target = event.target as HTMLElement;
+    if (target.closest?.('dialog[open]')) return;
     const inEditable =
       ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.contentEditable === 'true';
 

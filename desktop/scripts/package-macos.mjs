@@ -77,7 +77,9 @@ async function buildApp(stagingDir) {
   await mkdir(appDir);
   const { name, version } = JSON.parse(await readFile(join(desktopDir, 'package.json'), 'utf8'));
   await writeFile(join(appDir, 'package.json'), JSON.stringify({ name, version, main: 'main.cjs' }));
-  await cp(join(desktopDir, 'main.cjs'), join(appDir, 'main.cjs'));
+  for (const file of ['main.cjs', 'preload.cjs', 'mcp-setup.cjs']) {
+    await cp(join(desktopDir, file), join(appDir, file));
+  }
   await cp(join(projectDir, 'LICENSE'), join(appDir, 'LICENSE'));
   await cp(join(projectDir, 'NOTICE'), join(appDir, 'NOTICE'));
 
