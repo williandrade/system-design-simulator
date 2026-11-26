@@ -49,9 +49,12 @@ test('desktop serves the packaged SPA and prices with a loopback-specific policy
   ]);
   const port = await listen(t, createApp({ desktop: { staticDir, pricingFile, hostHeader: DESKTOP_HOST } }));
 
-  const page = await request(port, '/playground?mode=architect');
+  const page = await request(port, '/');
   assert.equal(page.status, 200);
   assert.equal(page.body, entry);
+  const legacyPlayground = await request(port, '/playground?mode=architect');
+  assert.equal(legacyPlayground.status, 200);
+  assert.equal(legacyPlayground.body, entry);
   const csp = page.headers['content-security-policy'];
   assert.match(csp, /(?:^|;)script-src 'self'(?:;|$)/);
   assert.match(csp, /connect-src[^;]*ws:\/\/127\.0\.0\.1:4301/);

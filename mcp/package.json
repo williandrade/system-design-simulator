@@ -1,11 +1,12 @@
 {
-  "name": "system-design-simulator-mcp",
+  "name": "willis-overengineer-inator-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "src/index.mjs",
   "bin": {
-    "system-design-simulator-mcp": "src/index.mjs"
+    "system-design-simulator-mcp": "src/index.mjs",
+    "willis-overengineer-inator-mcp": "src/index.mjs"
   },
   "engines": {
     "node": ">=20"

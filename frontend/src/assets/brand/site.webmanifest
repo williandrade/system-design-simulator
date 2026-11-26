@@ -1,6 +1,6 @@
 {
-  "name": "Sr. Architect",
-  "short_name": "Sr. Architect",
+  "name": "Willi's Overengineer-inator",
+  "short_name": "Willi's Overengineer-inator",
   "description": "Cloud system design simulator with deterministic traffic and cost modeling.",
   "start_url": "/",
   "display": "standalone",

@@ -4,7 +4,11 @@ import { z } from 'zod';
 import { failure } from '../shared/result.mjs';
 import { canvasTools } from '../tools/canvas-tools.mjs';
 
-export const SERVER_INFO = { name: 'system-design-simulator', version: '0.1.0' };
+export const SERVER_INFO = {
+  name: 'willis-overengineer-inator',
+  title: "Willi's Overengineer-inator",
+  version: '0.1.0',
+};
 
 function toolResult(result, summary) {
   if (!result.ok) {

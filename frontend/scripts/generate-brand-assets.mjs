@@ -1,9 +1,9 @@
-// Regenerates all raster brand assets from the master SVG marks.
-// Usage: cd frontend && npm i && node scripts/generate-brand-assets.mjs
-// Tools: sharp, png-to-ico (devDependencies)
-import { readFileSync, writeFileSync } from 'node:fs';
+// Regenerates the web assets, or a macOS icon when passed --mac-icon <output>.
+import { execFileSync } from 'node:child_process';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import sharp from 'sharp';
 import pngToIco from 'png-to-ico';
 
@@ -11,49 +11,67 @@ const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = resolve(here, '../src');
 const brandDir = resolve(srcDir, 'assets/brand');
 
-// T1 (dark tile) is the universal raster mark: bright nodes read on any chrome.
-const markDark = readFileSync(resolve(brandDir, 'logo-mark-dark.svg'));
+const source = resolve(brandDir, 'logo.svg');
+const logo = await sharp(await readFile(source), { density: 192 }).trim().png().toBuffer();
+const ink = '#1b2330';
+const transparent = '#00000000';
 
-const png = (size) => sharp(markDark, { density: 384 }).resize(size, size).png();
+function mark(width) {
+  return sharp(logo).resize({ width }).png().toBuffer();
+}
 
-const pngTargets = [
-  { file: `${brandDir}/favicon-16.png`, size: 16 },
-  { file: `${brandDir}/favicon-32.png`, size: 32 },
-  { file: `${brandDir}/favicon-48.png`, size: 48 },
-  { file: `${brandDir}/apple-touch-icon.png`, size: 180 },
-  { file: `${brandDir}/icon-192.png`, size: 192 },
-  { file: `${brandDir}/icon-512.png`, size: 512 },
-  { file: `${brandDir}/icon-maskable-512.png`, size: 512 },
-];
+async function webAssets() {
+  await copyFile(source, join(srcDir, 'favicon.svg'));
+  const faviconImages = [];
+  for (const size of [16, 32, 48]) {
+    const image = await sharp(logo).resize(size, size, { fit: 'contain', background: transparent }).png().toBuffer();
+    if (size !== 48) await writeFile(join(brandDir, `favicon-${size}.png`), image);
+    faviconImages.push(image);
+  }
+  await writeFile(join(srcDir, 'favicon.ico'), await pngToIco(faviconImages));
 
-// og:image / social card — mark centered on the brand ink background, font-free.
-const ogSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">
-  <rect width="1200" height="630" fill="#1b2330"/>
-  <g transform="translate(456,171) scale(4.5)">
-    <path d="M32 17L17 45L47 45Z" fill="none" stroke="#fff7e7" stroke-width="3" stroke-linejoin="round"/>
-    <circle cx="32" cy="17" r="5.5" fill="#ff9900"/>
-    <circle cx="17" cy="45" r="5.5" fill="#4aa3f0"/>
-    <circle cx="47" cy="45" r="5.5" fill="#2bbf7a"/>
-  </g>
-</svg>`;
-
-const run = async () => {
-  for (const t of pngTargets) {
-    await png(t.size).toFile(t.file);
-    console.log('wrote', t.file.replace(srcDir, 'src'));
+  for (const [filename, size] of [
+    ['apple-touch-icon.png', 180],
+    ['icon-192.png', 192],
+    ['icon-512.png', 512],
+    ['icon-maskable-512.png', 512],
+  ]) {
+    // The mark fits inside the centered safe area for maskable icons.
+    const input = await mark(Math.round(size * 0.67));
+    await sharp({ create: { width: size, height: size, channels: 4, background: ink } })
+      .composite([{ input }]).png().toFile(join(brandDir, filename));
   }
 
-  await sharp(Buffer.from(ogSvg)).png().toFile(`${brandDir}/og-image.png`);
-  console.log('wrote src/assets/brand/og-image.png');
+  await sharp({ create: { width: 1200, height: 630, channels: 4, background: ink } })
+    .composite([{ input: await mark(480) }]).png().toFile(join(brandDir, 'og-image.png'));
+  console.log('Updated web icons and social image from logo.svg');
+}
 
-  // Multi-resolution favicon.ico (16/32/48) at the served web root.
-  const ico = await pngToIco([
-    await png(16).toBuffer(),
-    await png(32).toBuffer(),
-    await png(48).toBuffer(),
-  ]);
-  writeFileSync(resolve(srcDir, 'favicon.ico'), ico);
-  console.log('wrote src/favicon.ico');
-};
+async function macIcon(output) {
+  const directory = await mkdtemp(join(tmpdir(), 'simulator-icon-'));
+  try {
+    const iconset = join(directory, 'App.iconset');
+    await mkdir(iconset);
+    const iconSizes = [16, 32, 128, 256, 512];
+    const pixelSizes = new Set([...iconSizes, ...iconSizes.map((size) => size * 2)]);
+    for (const size of pixelSizes) {
+      const tile = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024"><rect x="72" y="72" width="880" height="880" rx="196" fill="${ink}"/></svg>`);
+      const image = await sharp(tile).composite([{ input: await mark(Math.round(size * 0.68)) }]).png().toBuffer();
+      if (iconSizes.includes(size)) await writeFile(join(iconset, `icon_${size}x${size}.png`), image);
+      const halfSize = size / 2;
+      if (iconSizes.includes(halfSize)) await writeFile(join(iconset, `icon_${halfSize}x${halfSize}@2x.png`), image);
+    }
+    execFileSync('/usr/bin/iconutil', ['-c', 'icns', '-o', output, iconset], { stdio: 'inherit' });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
 
-run().catch((e) => { console.error(e); process.exit(1); });
+const [, , option, output] = process.argv;
+if (option === '--mac-icon' && output) {
+  await macIcon(resolve(output));
+} else if (!option) {
+  await webAssets();
+} else {
+  throw new Error('Usage: node scripts/generate-brand-assets.mjs [--mac-icon <output>]');
+}

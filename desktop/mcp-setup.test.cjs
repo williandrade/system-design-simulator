@@ -13,7 +13,7 @@ function fixture(t) {
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const launcherPath = path.join(directory, "Cópia ' $(echo expanded) `echo expanded` $USER");
   writeFileSync(launcherPath, '', { mode: 0o700 });
-  const senderFrame = { origin, url: `${origin}/playground?mode=architect` };
+  const senderFrame = { origin, url: `${origin}/` };
   const sender = { mainFrame: senderFrame };
   const handlers = new Map();
   const writes = [];
@@ -41,12 +41,14 @@ test('quotes the bundled launcher as one literal argument for both clients', (t)
     assert.equal(copy(event, client), true);
     assert.equal(writes.at(-1), setup.commands[client]);
     const prefix = client === 'codex'
-      ? 'codex mcp add system-design-simulator -- '
-      : 'claude mcp add --transport stdio --scope user system-design-simulator -- ';
+      ? 'codex mcp add willis-overengineer-inator -- '
+      : 'claude mcp add --transport stdio --scope user willis-overengineer-inator -- ';
     assert.ok(setup.commands[client].startsWith(prefix));
     const quotedPath = setup.commands[client].slice(prefix.length);
     assert.equal(execFileSync('/bin/sh', ['-c', `printf %s ${quotedPath}`], { encoding: 'utf8' }), launcherPath);
   }
+  event.senderFrame.url = `${origin}/playground?mode=architect`;
+  assert.deepEqual(get(event), setup);
 });
 
 test('rejects other clients, windows, frames, origins, routes and missing launchers', (t) => {

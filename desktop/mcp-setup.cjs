@@ -1,8 +1,8 @@
 const { accessSync, constants, statSync } = require('node:fs');
 
 const COMMANDS = {
-  codex: 'codex mcp add system-design-simulator -- ',
-  claude: 'claude mcp add --transport stdio --scope user system-design-simulator -- ',
+  codex: 'codex mcp add willis-overengineer-inator -- ',
+  claude: 'claude mcp add --transport stdio --scope user willis-overengineer-inator -- ',
 };
 
 function getSetup(launcherPath) {
@@ -27,9 +27,10 @@ function getSetup(launcherPath) {
 
 function registerMcpSetup({ ipcMain, clipboard, getWindow, origin, launcherPath }) {
   function isAllowed({ sender, senderFrame }) {
-    return Boolean(senderFrame) && sender === getWindow()?.webContents &&
-      senderFrame === sender.mainFrame && senderFrame.origin === origin &&
-      URL.parse(senderFrame.url)?.pathname === '/playground';
+    if (!senderFrame || sender !== getWindow()?.webContents ||
+      senderFrame !== sender.mainFrame || senderFrame.origin !== origin) return false;
+    const pathname = URL.parse(senderFrame.url)?.pathname;
+    return pathname === '/' || pathname === '/playground';
   }
 
   ipcMain.handle('mcp-setup:get', (event) => isAllowed(event) ? getSetup(launcherPath) : null);

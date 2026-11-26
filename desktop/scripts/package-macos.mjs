@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const desktopDir = fileURLToPath(new URL('../', import.meta.url));
 const projectDir = fileURLToPath(new URL('../../', import.meta.url));
 const frontendDir = join(projectDir, 'frontend');
-const appName = 'System Design Simulator';
+const { name, version, productName } = JSON.parse(await readFile(join(desktopDir, 'package.json'), 'utf8'));
 const electronVersion = '45.5.0';
 const nodeVersion = '24.22.3';
 const nodeArchiveHash = '1d64136c8a43d648d1b3bad10797a4c995b1ca032d2bde8799de43b37f058fe5';
@@ -52,6 +52,8 @@ async function stageNode(stagingDir, resourcesDir) {
 }
 
 async function buildApp(stagingDir) {
+  const icon = join(stagingDir, 'App.icns');
+  run(process.execPath, [join(frontendDir, 'scripts/generate-brand-assets.mjs'), '--mac-icon', icon], frontendDir);
   const angularOutputDir = join(stagingDir, 'angular');
   run(process.execPath, [
     join(frontendDir, 'node_modules/@angular/cli/bin/ng.js'),
@@ -69,14 +71,17 @@ async function buildApp(stagingDir) {
   await stageRuntimePackage('mcp', ['src'], resourcesDir);
   await stageNode(stagingDir, resourcesDir);
 
-  const launcherPath = join(resourcesDir, 'system-design-simulator-mcp');
-  await cp(join(desktopDir, 'scripts/system-design-simulator-mcp'), launcherPath);
-  await chmod(launcherPath, 0o755);
+  const launcherSource = join(desktopDir, 'scripts/system-design-simulator-mcp');
+  // Keep the previous filename available for MCP hosts with an existing launcher path.
+  for (const filename of ['willis-overengineer-inator-mcp', 'system-design-simulator-mcp']) {
+    const launcherPath = join(resourcesDir, filename);
+    await cp(launcherSource, launcherPath);
+    await chmod(launcherPath, 0o755);
+  }
 
   const appDir = join(stagingDir, 'app');
   await mkdir(appDir);
-  const { name, version } = JSON.parse(await readFile(join(desktopDir, 'package.json'), 'utf8'));
-  await writeFile(join(appDir, 'package.json'), JSON.stringify({ name, version, main: 'main.cjs' }));
+  await writeFile(join(appDir, 'package.json'), JSON.stringify({ name, version, productName, main: 'main.cjs' }));
   for (const file of ['main.cjs', 'preload.cjs', 'mcp-setup.cjs']) {
     await cp(join(desktopDir, file), join(appDir, file));
   }
@@ -84,7 +89,8 @@ async function buildApp(stagingDir) {
   await cp(join(projectDir, 'NOTICE'), join(appDir, 'NOTICE'));
 
   const [outputDir] = await packager({
-    name: appName,
+    name: productName,
+    icon,
     appBundleId: 'io.github.williandrade.system-design-simulator',
     dir: appDir,
     extraResource: resourcesDir,
@@ -104,7 +110,7 @@ async function buildApp(stagingDir) {
       optionsForFile: () => ({ hardenedRuntime: false, timestamp: 'none' }),
     },
   });
-  console.log(`App ready: ${join(outputDir, `${appName}.app`)}`);
+  console.log(`App ready: ${join(outputDir, `${productName}.app`)}`);
 }
 
 if (process.platform !== 'darwin' || process.arch !== 'arm64' || process.versions.node.split('.')[0] !== '24') {

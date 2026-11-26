@@ -943,10 +943,9 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Whether the navbar role-switcher dropdown is open. */
   roleMenuOpen = false;
 
-  /** Unsaved-work guard popup. Shown when leaving a non-empty canvas via a
-   *  mode switch, going to the homepage, or closing a tab. */
+  /** Unsaved-work guard popup for switching modes or closing a tab. */
   leaveGuard: {
-    action: 'switch' | 'home' | 'closeTab';
+    action: 'switch' | 'closeTab';
     title: string;
     message: string;
     mode?: 'developer' | 'architect';
@@ -2362,22 +2361,6 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.costService.unsupportedRegion$.next(null);
   }
 
-  goHome(): void {
-    if (this.anyTabUnsaved()) {
-      const count = this.tabs.filter((_, i) => this.tabIsUnsaved(i)).length;
-      this.leaveGuard = {
-        action: 'home',
-        title: 'Leave to homepage?',
-        message:
-          count > 1
-            ? `You have unsaved work on ${count} canvases. Save it first, or discard it and go to the homepage.`
-            : 'You have unsaved work on the canvas. Save it first, or discard it and go to the homepage.',
-      };
-      return;
-    }
-    this.doGoHome();
-  }
-
   /** Native browser warning for refresh / closing the tab / external back. */
   @HostListener('window:beforeunload', ['$event'])
   onBeforeUnload(event: BeforeUnloadEvent): void {
@@ -2385,12 +2368,6 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       event.preventDefault();
       event.returnValue = '';
     }
-  }
-
-  private doGoHome(): void {
-    this.mcp.disconnect();
-    window.history.pushState(null, '', '/');
-    window.dispatchEvent(new Event('popstate'));
   }
 
   /** True when the active canvas has any services, connections, or notes. */
@@ -2484,7 +2461,6 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const proceed = () => {
       if (g.action === 'switch' && g.mode) this.applyRoleSwitch(g.mode);
-      else if (g.action === 'home') this.doGoHome();
       else if (g.action === 'closeTab' && g.tabIndex != null) this.doCloseTab(g.tabIndex);
     };
 
@@ -2501,11 +2477,11 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
         this.resetAllCanvases();
         proceed();
         break;
-      case 'save': // home / closeTab: save first, then leave/close
+      case 'save':
         this.saveNow();
         proceed();
         break;
-      case 'discard': // home / closeTab: leave/close without saving
+      case 'discard':
         proceed();
         break;
     }
@@ -2550,14 +2526,6 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   @HostListener('document:click')
   closeRoleMenu(): void {
     if (this.roleMenuOpen) this.roleMenuOpen = false;
-  }
-
-  goDocs(): void {
-    this.mcp.disconnect();
-    // Record origin so the docs "Back" button returns to the playground.
-    sessionStorage.setItem('docsOrigin', '/playground');
-    window.history.pushState(null, '', '/docs');
-    window.dispatchEvent(new Event('popstate'));
   }
 
   @HostListener('window:keydown', ['$event'])

@@ -21,6 +21,7 @@ const CORE = join(ROOT, 'src', 'app', 'core');
 const OUT = join(ROOT, 'dist', 'aws-system-design-simulator-client', 'browser');
 
 const SITE = 'https://srarchitect.qzz.io';
+const PROJECT_NAME = "Willi's Overengineer-inator";
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
@@ -172,7 +173,7 @@ function servicePage(svc) {
   const abv = TITLE_ABBREVIATIONS[svc.type];
   const hasBrand = /^(AWS|Amazon)/.test(name);
   const titleProduct = abv ? `${name} (${abv})` : (hasBrand ? name : `${name} (AWS)`);
-  const title = `What is ${titleProduct}? Guide, Architecture, Cost & Pricing | Sr. Architect`;
+  const title = `What is ${titleProduct}? Guide, Architecture, Cost & Pricing | ${PROJECT_NAME}`;
   const desc = (d.overview || '').slice(0, 158);
 
   const shortName = name.replace(/^(AWS|Amazon)\s+/, '');
@@ -213,15 +214,15 @@ function servicePage(svc) {
         datePublished: '2026-01-01',
         dateModified: TODAY,
         author: { '@type': 'Person', name: 'Sushant Kumar' },
-        publisher: { '@type': 'Organization', name: 'Sr. Architect', url: SITE },
+        publisher: { '@type': 'Organization', name: PROJECT_NAME, url: SITE },
         mainEntityOfPage: url,
-        isPartOf: { '@type': 'WebSite', name: 'Sr. Architect', url: SITE },
+        isPartOf: { '@type': 'WebSite', name: PROJECT_NAME, url: SITE },
       },
       faqJsonLd(name, d, cm),
       {
         '@type': 'BreadcrumbList',
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+          { '@type': 'ListItem', position: 1, name: 'Playground', item: `${SITE}/` },
           { '@type': 'ListItem', position: 2, name: 'AWS Service Library', item: `${SITE}/services/` },
           { '@type': 'ListItem', position: 3, name, item: url },
         ],
@@ -254,7 +255,7 @@ function servicePage(svc) {
 </head>
 <body>
 <div class="wrap">
-<nav class="crumbs"><a href="/">Home</a> › <a href="/services/">AWS Service Library</a> › ${esc(name)}</nav>
+<nav class="crumbs"><a href="/">Playground</a> › <a href="/services/">AWS Service Library</a> › ${esc(name)}</nav>
 <span class="cat">${esc(svc.category)}</span>
 <h1>${esc(name)} <span style="color:var(--muted);font-weight:400">(AWS)</span></h1>
 <p class="lede">${esc(d.overview)}</p>
@@ -283,7 +284,7 @@ ${related.length ? `<h2>Related AWS services</h2><ul class="related">${related.m
 
 <footer>
 Part of the <a href="/services/">AWS Service Library</a> on
-<a href="/">Sr. Architect, the free, open-source AWS system design simulator</a>.
+<a href="/">${PROJECT_NAME}, the free, open-source AWS system design simulator</a>.
 Pricing and behavior are modeled for learning and estimation; always confirm against
 <a href="https://aws.amazon.com/pricing/" rel="nofollow noopener">official AWS pricing</a>.
 </footer>
@@ -317,26 +318,26 @@ function hubPage() {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AWS Service Library: What Each Service Is, How It Works & Cost | Sr. Architect</title>
+<title>AWS Service Library: What Each Service Is, How It Works & Cost | ${PROJECT_NAME}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Plain-language guides to ${indexable.length}+ AWS services: what each is, how it works, when to use it, and how it is priced. Then model them under live traffic and cost.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="${SITE}/services/">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta property="og:type" content="website">
-<meta property="og:title" content="AWS Service Library | Sr. Architect">
+<meta property="og:title" content="AWS Service Library | ${PROJECT_NAME}">
 <meta property="og:url" content="${SITE}/services/">
 <style>${STYLE}</style>
 <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
 </head>
 <body>
 <div class="wrap">
-<nav class="crumbs"><a href="/">Home</a> › AWS Service Library</nav>
+<nav class="crumbs"><a href="/">Playground</a> › AWS Service Library</nav>
 <h1>AWS Service Library</h1>
 <p class="lede">Plain-language guides to ${indexable.length} AWS services: what each one is, how it works, when to use it, and how it is priced. Then drop them onto a canvas and simulate traffic, cost, and bottlenecks.</p>
 <a class="cta" href="/">Open the AWS system design simulator →</a>
 ${sections}
-<footer>Part of <a href="/">Sr. Architect, the free, open-source AWS system design simulator</a>.</footer>
+<footer>Part of <a href="/">${PROJECT_NAME}, the free, open-source AWS system design simulator</a>.</footer>
 </div>
 </body>
 </html>`;
@@ -360,12 +361,12 @@ ${urls
 
 function llmsTxt() {
   const lines = [
-    '# Sr. Architect: AWS System Design Simulator',
+    `# ${PROJECT_NAME}`,
     '',
     '> A free, open-source, browser-based tool to design AWS architectures and run a deterministic traffic-and-cost simulation. Drag AWS services onto a canvas, connect them, and see per-node RPS, latency, and utilization, an accurate monthly AWS cost estimate, and the traffic bottleneck. Built for engineers learning system design, people learning AWS, and cloud architects estimating real cost.',
     '',
     '## Core',
-    `- [AWS System Design Simulator](${SITE}/): interactive canvas, live simulation, cost estimation, and bottleneck detection.`,
+    `- [${PROJECT_NAME}](${SITE}/): interactive canvas, live simulation, cost estimation, and bottleneck detection.`,
     `- [AWS Service Library](${SITE}/services/): guides to every supported AWS service.`,
     '',
     '## AWS service guides',

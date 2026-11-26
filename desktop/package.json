@@ -1,8 +1,9 @@
 {
   "name": "system-design-simulator-desktop",
+  "productName": "Willi's Overengineer-inator",
   "version": "0.1.0",
   "private": true,
-  "description": "Package the System Design Simulator for Apple Silicon Macs",
+  "description": "Package Willi's Overengineer-inator for Apple Silicon Macs",
   "engines": {
     "node": "24.x"
   },

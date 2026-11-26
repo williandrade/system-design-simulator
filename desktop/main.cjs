@@ -1,14 +1,16 @@
 const { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell } = require('electron');
 const { once } = require('node:events');
+const { mkdirSync } = require('node:fs');
 const { access } = require('node:fs/promises');
 const path = require('node:path');
 const { registerMcpSetup } = require('./mcp-setup.cjs');
+const { name, productName } = require('./package.json');
 
 const HOST = '127.0.0.1';
 const PORT = 4200;
 const HOST_HEADER = `${HOST}:${PORT}`;
 const ORIGIN = `http://${HOST_HEADER}`;
-const PLAYGROUND_URL = `${ORIGIN}/playground?mode=architect`;
+const PLAYGROUND_URL = `${ORIGIN}/`;
 const EXTERNAL_LINKS = new Set([
   'https://000sushant.github.io/sushant-portfolio/',
   'https://forms.gle/2Kh6TKqcwYUSnYnHA',
@@ -39,7 +41,7 @@ function openInBrowser(url) {
 
   if (isServiceDocs || EXTERNAL_LINKS.has(url.href)) {
     shell.openExternal(url.href).catch(() => {
-      dialog.showErrorBox('System Design Simulator', 'Could not open the link in your browser.');
+      dialog.showErrorBox(productName, 'Could not open the link in your browser.');
     });
   }
 }
@@ -116,7 +118,7 @@ async function start() {
     clipboard,
     getWindow: () => mainWindow,
     origin: ORIGIN,
-    launcherPath: path.join(resources, 'system-design-simulator-mcp'),
+    launcherPath: path.join(resources, 'willis-overengineer-inator-mcp'),
   });
 
   const { createApp } = require(path.join(resources, 'backend', 'server.js'));
@@ -135,8 +137,15 @@ function failStartup(error) {
   const message = error.code === 'EADDRINUSE'
     ? `Port ${PORT} is already in use. Close the local service using it and reopen the simulator.`
     : 'Could not start the local simulator. Rebuild or reinstall the application and try again.';
-  dialog.showErrorBox('System Design Simulator', message);
+  dialog.showErrorBox(productName, message);
   app.exit(1);
+}
+
+if (!app.commandLine.hasSwitch('user-data-dir')) {
+  // Electron normally uses productName as the profile directory after a rename.
+  const profilePath = path.join(app.getPath('appData'), name);
+  mkdirSync(profilePath, { recursive: true });
+  app.setPath('userData', profilePath);
 }
 
 if (!app.requestSingleInstanceLock()) {

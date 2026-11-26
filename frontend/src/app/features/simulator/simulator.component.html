@@ -13,19 +13,10 @@
 >
   <header class="toolbar" (mousemove)="onMouseMove($event)">
     <div class="brand">
-      <a
-        class="brand-mark"
-        role="button"
-        tabindex="0"
-        (click)="goHome()"
-        (keydown.enter)="goHome()"
-        (keydown.space)="$event.preventDefault(); goHome()"
-        style="cursor: pointer"
-        aria-label="Sr. Architect home"
-      >
+      <div class="brand-mark">
         <img src="favicon.svg" alt="" />
-        <span>Sr<span class="brand-dot">.</span> Architect</span>
-      </a>
+        <span>Willi's Overengineer-inator</span>
+      </div>
       <div class="role-switcher">
         <button
           type="button"
@@ -75,23 +66,6 @@
 
     <div class="toolbar-actions">
       <div class="toolbar-actions-inner">
-        <button
-          type="button"
-          class="action-btn"
-          (mousemove)="onMouseMove($event)"
-          (click)="goHome()"
-        >
-          <i class="fas fa-home"></i> Home
-        </button>
-        <button
-          type="button"
-          class="action-btn"
-          (mousemove)="onMouseMove($event)"
-          (click)="goDocs()"
-        >
-          <i class="fas fa-book"></i> Docs
-        </button>
-        <span class="divider"></span>
         <button
           type="button"
           class="icon-button"
@@ -246,7 +220,7 @@
             <form (submit)="pairMcpCanvas($event, pairingCode)">
               <label>
                 Prompt for your MCP client
-                <textarea readonly rows="3">Call get_canvas_pairing on system-design-simulator and show me the one-time code.</textarea>
+                <textarea readonly rows="3">Call the get_canvas_pairing MCP tool and show me the one-time code for Willi's Overengineer-inator.</textarea>
               </label>
               <label>
                 Pairing code
@@ -2002,7 +1976,7 @@
         </div>
         <h2>Optimize Your Experience</h2>
         <p>
-          Sr. Architect works best on larger displays. Switch to a tablet or desktop to unlock full
+          Willi's Overengineer-inator works best on larger displays. Switch to a tablet or desktop to unlock full
           precision modeling and advanced simulation features.
         </p>
         <div class="warning-actions">

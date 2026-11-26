@@ -25,6 +25,8 @@ export class DocumentationComponent implements OnInit, AfterViewChecked, OnDestr
   private themeService = inject(ThemeService);
   private titleService = inject(Title);
   private metaService = inject(Meta);
+  private readonly initialTitle = this.titleService.getTitle();
+  private readonly initialDescription = this.metaService.getTag('name="description"')?.content ?? '';
 
   searchQuery = '';
   activeCategoryId = 'overview';
@@ -89,7 +91,7 @@ export class DocumentationComponent implements OnInit, AfterViewChecked, OnDestr
       icon: 'fas fa-heart',
       accent: 'sponsor',
       title: 'Sponsor the project',
-      text: '100% of every sponsorship goes straight into building Sr. Architect, keeping the pricing pipeline running and shipping new features. Even $1 matters and helps keep things running.',
+      text: '100% of every sponsorship goes straight into building Willi\'s Overengineer-inator, keeping the pricing pipeline running and shipping new features. Even $1 matters and helps keep things running.',
       cta: 'Become a sponsor',
       href: 'https://github.com/sponsors/000Sushant',
     },
@@ -129,6 +131,8 @@ export class DocumentationComponent implements OnInit, AfterViewChecked, OnDestr
 
   ngOnDestroy(): void {
     window.removeEventListener('popstate', this.onPop);
+    this.titleService.setTitle(this.initialTitle);
+    this.metaService.updateTag({ name: 'description', content: this.initialDescription });
   }
 
   checkQueryParam(): void {
@@ -212,12 +216,12 @@ export class DocumentationComponent implements OnInit, AfterViewChecked, OnDestr
       const abv = titleAbbreviations[this.selectedServiceType];
       const hasBrand = /^(AWS|Amazon)/.test(name);
       const titleProduct = abv ? `${name} (${abv})` : (hasBrand ? name : `${name} (AWS)`);
-      const title = `What is ${titleProduct}? Guide, Architecture, Cost & Pricing | Sr. Architect`;
+      const title = `What is ${titleProduct}? Guide, Architecture, Cost & Pricing | Willi's Overengineer-inator`;
 
       this.titleService.setTitle(title);
       this.metaService.updateTag({ name: 'description', content: description });
     } else {
-      this.titleService.setTitle('AWS Service Library: What Each Service Is, How It Works & Cost | Sr. Architect');
+      this.titleService.setTitle('AWS Service Library: What Each Service Is, How It Works & Cost | Willi\'s Overengineer-inator');
       this.metaService.updateTag({
         name: 'description',
         content: 'Plain-language guides to AWS services: what each is, how it works, when to use it, and how it is priced.'
