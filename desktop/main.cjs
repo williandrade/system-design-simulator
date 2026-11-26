@@ -1,7 +1,8 @@
-const { app, BrowserWindow, dialog, session, shell } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell } = require('electron');
 const { once } = require('node:events');
 const { access } = require('node:fs/promises');
 const path = require('node:path');
+const { registerMcpSetup } = require('./mcp-setup.cjs');
 
 const HOST = '127.0.0.1';
 const PORT = 4200;
@@ -57,6 +58,7 @@ async function showPlayground() {
     height: 940,
     show: false,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -109,6 +111,13 @@ async function start() {
 
   session.defaultSession.setPermissionCheckHandler(() => false);
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  registerMcpSetup({
+    ipcMain,
+    clipboard,
+    getWindow: () => mainWindow,
+    origin: ORIGIN,
+    launcherPath: path.join(resources, 'system-design-simulator-mcp'),
+  });
 
   const { createApp } = require(path.join(resources, 'backend', 'server.js'));
   server = createApp({ desktop: { staticDir, pricingFile, hostHeader: HOST_HEADER } })

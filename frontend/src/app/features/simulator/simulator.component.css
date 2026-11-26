@@ -177,13 +177,24 @@ select {
   gap: 6px;
 }
 
-.mcp-panel input {
+.mcp-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mcp-panel input,
+.mcp-panel textarea {
   min-width: 0;
   padding: 6px 8px;
   color: inherit;
   background: var(--c-white);
   border: 1px solid var(--c-slate-300);
   border-radius: 6px;
+}
+
+.mcp-panel textarea {
+  font: inherit;
+  resize: vertical;
 }
 
 .mcp-panel p {
