@@ -1,6 +1,5 @@
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { SimulatorComponent } from './features/simulator/simulator.component';
-import { LandingComponent } from './features/landing/landing.component';
 import { DocumentationComponent } from './features/documentation/documentation.component';
 import { ReportsComponent } from './features/reports/reports.component';
 import { ThemeService } from './core/services/theme.service';
@@ -8,29 +7,24 @@ import { ThemeService } from './core/services/theme.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [LandingComponent, SimulatorComponent, DocumentationComponent, ReportsComponent],
+  imports: [SimulatorComponent, DocumentationComponent, ReportsComponent],
   template: `
     @if (reportsOpen) {
       <app-reports />
     } @else if (docsOpen) {
       <app-documentation />
-    } @else if (simulatorOpen) {
-      <app-simulator />
     } @else {
-      <app-landing (launch)="openSimulator($event)" />
+      <app-simulator />
     }
   `,
 })
 export class AppComponent implements OnInit, OnDestroy {
-  private themeService = inject(ThemeService);
+  private readonly themeService = inject(ThemeService);
 
-  simulatorOpen = false;
   docsOpen = false;
   reportsOpen = false;
 
-  constructor() {}
-
-  private onPop = () => {
+  private readonly onPop = () => {
     this.handleRouting();
   };
 
@@ -45,18 +39,14 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private handleRouting(): void {
     if (typeof window !== 'undefined' && window.location) {
-      const path = window.location.pathname;
-      this.reportsOpen = path.startsWith('/benchmarks') || path.startsWith('/reports');
-      this.simulatorOpen = path.startsWith('/playground');
-      this.docsOpen = path.startsWith('/docs');
+      const url = new URL(window.location.href);
+      const [, section] = url.pathname.split('/');
+      this.reportsOpen = section === 'benchmarks' || section === 'reports';
+      this.docsOpen = section === 'docs';
+      if (!this.reportsOpen && !this.docsOpen && url.pathname !== '/playground' && url.pathname !== '/') {
+        url.pathname = '/';
+        window.history.replaceState(window.history.state, '', url);
+      }
     }
-  }
-
-  openSimulator(mode?: 'developer' | 'architect'): void {
-    const url = mode ? `/playground?mode=${mode}` : '/playground';
-    window.history.pushState(null, '', url);
-    this.simulatorOpen = true;
-    this.docsOpen = false;
-    this.reportsOpen = false;
   }
 }

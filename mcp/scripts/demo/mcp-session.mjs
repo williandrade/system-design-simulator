@@ -30,7 +30,7 @@ export async function withCanvas(execute) {
     args: [serverPath],
     env: operatorPairing ? { [OPERATOR_CODE_ENV]: operatorPairing } : undefined,
   });
-  const client = new Client({ name: 'system-design-simulator-demo', version: '1.0.0' });
+  const client = new Client({ name: 'willis-overengineer-inator-demo', version: '1.0.0' });
   try {
     await client.connect(transport);
     async function invoke(name, args = {}) {

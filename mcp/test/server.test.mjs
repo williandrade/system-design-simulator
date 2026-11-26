@@ -19,6 +19,8 @@ async function connectMcp(t, relay, options) {
 test('advertises strict MCP schemas and returns structured errors and values over the SDK', async (t) => {
   const relay = await start(t);
   const client = await connectMcp(t, relay);
+  assert.equal(client.getServerVersion().name, 'willis-overengineer-inator');
+  assert.equal(client.getServerVersion().title, "Willi's Overengineer-inator");
   const { tools } = await client.listTools();
   assert.equal(tools.length, 8);
   assert.ok(tools.every((tool) => tool.inputSchema.additionalProperties === false));

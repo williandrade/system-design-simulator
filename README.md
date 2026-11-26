@@ -1,4 +1,4 @@
-# ☁️ Sr. Architect: AWS System Design Simulator
+# Willi's Overengineer-inator
 
 [![Angular](https://img.shields.io/badge/Angular-DD0031?style=for-the-badge&logo=angular&logoColor=white)](https://angular.io/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -6,7 +6,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db2777?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/000Sushant)
 
-**Learn. Design. Simulate. Optimize.** Sr. Architect is an interactive, browser-based system design simulator and cloud architecture sketchbook. It features a deterministic traffic-and-cost simulation engine that lets you model AWS environments, watch real-time traffic flow, spot bottlenecks under load, and evaluate real-time monthly billing.
+**Learn. Design. Simulate. Optimize.** Willi's Overengineer-inator is an interactive, browser-based system design simulator and cloud architecture sketchbook. It features a deterministic traffic-and-cost simulation engine that lets you model AWS environments, watch real-time traffic flow, spot bottlenecks under load, and evaluate real-time monthly billing.
 
 ---
 
@@ -48,7 +48,7 @@ A built-in Reports page (`/reports`) publishes the project's own audit artifacts
 
 ## ⚙️ Core Simulation Engines
 
-Sr. Architect's interactive simulator runs on two custom, deterministic engines:
+The simulator runs on two custom, deterministic engines:
 
 ### 💓 PulseFlow: Reactive Traffic Simulation Engine
 PulseFlow is the reactive heartbeat of the visual workspace, running about 5 times a second (at a steady ~180ms tick interval). It is designed to mimic realistic production environment characteristics:
@@ -79,7 +79,7 @@ Rubix is a declarative verification and grading engine that analyzes your visual
 
 ## 🗺️ System Architecture
 
-Sr. Architect decouples the canvas UI, the simulation iteration loop, and the live AWS pricing pipelines into a highly efficient distributed topology:
+Willi's Overengineer-inator decouples the canvas UI, the simulation iteration loop, and the live AWS pricing pipelines into a highly efficient distributed topology:
 
 ![System Architecture Diagram](docs/images/system_architecture_light.png)
 
@@ -153,7 +153,7 @@ mcp/               # Local MCP server for the Architect canvas
 
 #### 1. Clone the repository
 ```bash
-git clone https://github.com/000Sushant/system-design-simulator.git
+git clone https://github.com/williandrade/system-design-simulator.git
 cd system-design-simulator
 ```
 
@@ -163,7 +163,7 @@ cd frontend
 npm install
 npm run start
 ```
-The application will launch locally at `http://localhost:4200/`.
+The playground opens at `http://localhost:4200/`. Existing `/playground` links also open the canvas.
 
 Run the unit/characterization test suite (Vitest) and lint:
 ```bash
@@ -197,13 +197,13 @@ npm ci --prefix desktop
 npm run package --prefix desktop
 ```
 
-In Finder, open `desktop/dist/System Design Simulator-darwin-arm64/`. Copy `System Design Simulator.app` to a stable location such as `~/Applications` and open it. The app starts the simulator and pricing API on `127.0.0.1:4200`. The included `us-east-1` pricing snapshot works without Cloudflare credentials. Other regions require access to the configured pricing KV. Release port `4200` before opening the app if a web development server is running there.
+In Finder, open `desktop/dist/Willi's Overengineer-inator-darwin-arm64/`. Copy `Willi's Overengineer-inator.app` to a stable location such as `~/Applications` and open it. The app starts the simulator and pricing API on `127.0.0.1:4200`. The included `us-east-1` pricing snapshot works without Cloudflare credentials. Other regions require access to the configured pricing KV. Release port `4200` before opening the app if a web development server is running there.
 
 The app has its own project storage. To migrate a browser project, export its JSON from the browser and import it in the desktop app.
 
 #### Connect Codex or Claude to the desktop canvas
 
-Open an Architect canvas and select **MCP → Configure**. Choose **Codex** or **Claude**. The app shows the setup command for its bundled launcher, with instructions for using Codex desktop or Claude Desktop Chat. Run the copied command for first-time CLI setup. If you move the app, update the launcher path in the existing entry to keep your tool settings.
+Open an Architect canvas and select **MCP → Configure**. Choose **Codex** or **Claude**. The app shows the setup command for its bundled launcher, with instructions for using Codex desktop or Claude Desktop Chat. The command registers `willis-overengineer-inator` for first-time setup. If you already registered the server, keep that entry and update its launcher path only if you moved or renamed the app bundle.
 
 Open a new local client session and select **MCP → Pair**. Follow the prompt to request a one-time code, enter it in the app, and select **Pair**. Ask the client to call `get_canvas_state` before it edits the canvas and keep the window visible during edits. When switching clients, stop the previous client's relay process to free port `4301`. [MCP tools and development workflow](mcp/README.md)
 

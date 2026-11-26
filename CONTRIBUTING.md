@@ -1,6 +1,6 @@
-# Contributing to Sr. Architect
+# Contributing to Willi's Overengineer-inator
 
-Thanks for taking the time to help improve the AWS System Design Simulator. Whether you are fixing a typo, refining a cost formula, or adding a whole new service, your contribution is welcome here.
+Thanks for taking the time to help improve Willi's Overengineer-inator. Whether you are fixing a typo, refining a cost formula, or adding a whole new service, your contribution is welcome here.
 
 This project aims to be highly accurate in both cost and traffic simulation, so the guidelines below help keep that quality bar high.
 

@@ -27,6 +27,7 @@ export class McpSetupComponent {
   private readonly desktop = typeof window === 'undefined' ? undefined : window.simulatorMcpSetup;
   protected readonly setup = signal<McpSetup | null | undefined>(undefined);
   protected readonly client = signal<McpClient>('codex');
+  protected readonly serverName = 'willis-overengineer-inator';
   protected readonly copying = signal(false);
   protected readonly copyResult = signal<{ client: McpClient; message: string } | null>(null);
   protected readonly claudeChatConfig = computed(() => {
@@ -35,7 +36,7 @@ export class McpSetupComponent {
     return JSON.stringify(
       {
         mcpServers: {
-          'system-design-simulator': { command: setup.launcherPath, args: [] },
+          [this.serverName]: { command: setup.launcherPath, args: [] },
         },
       },
       null,

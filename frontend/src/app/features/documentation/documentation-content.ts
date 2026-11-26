@@ -3972,13 +3972,13 @@ export const RELEASE_NOTES: ReleaseNote[] = [
 export const ARTICLES: DocArticle[] = [
   {
     id: 'ov-intro',
-    title: 'What is Sr. Architect?',
+    title: 'What is Willi\'s Overengineer-inator?',
     category: 'overview',
     icon: 'fas fa-info-circle',
     summary:
       'A high-fidelity system design simulator that brings static cloud architecture diagrams to life.',
     content: [
-      'Sr. Architect is an interactive, visual system design sandbox that lets you <span class="text-purple">model and simulate AWS cloud architectures</span> in real time without provisioning resources.',
+      'Willi\'s Overengineer-inator is an interactive, visual system design sandbox that lets you <span class="text-purple">model and simulate AWS cloud architectures</span> in real time without provisioning resources.',
       'Simply drag-and-drop components (like servers, queues, databases, API gateways), connect them, and watch simulated traffic flow through your conduits like glowing packets.',
       'It translates abstract architectural principles into interactive visuals, letting you adjust sliders for traffic load, instance configurations, and replica rates to instantly observe how your topology responds to stress.',
     ],
@@ -4024,7 +4024,7 @@ export const ARTICLES: DocArticle[] = [
     category: 'engines',
     icon: 'fas fa-heart-pulse',
     summary:
-      'The deterministic heartbeat of Sr. Architect that powers real-time traffic flow, queues, and latency degradation.',
+      'The deterministic heartbeat of Willi\'s Overengineer-inator that powers real-time traffic flow, queues, and latency degradation.',
     content: [
       'At the core of the simulator is <span class="text-purple"><strong>PulseFlow</strong></span>, our custom-built, reactive simulation engine. PulseFlow resolves the entire system state about five times a second, translating simple diagram lines into live, dynamic networks.',
       '<div class="engine-svg-wrapper" style="margin: 16px 0; max-width: 100%; overflow: hidden; border-radius: 12px;">' +
@@ -4184,11 +4184,11 @@ export const ARTICLES: DocArticle[] = [
     content: [
       '<ul>' +
       '<li><span class="text-purple"><strong>Static Diagrams vs. Dynamic Reality</strong></span><br>' +
-      'Traditional tools like Draw.io create nice pictures, but they cannot tell you when a server will crash, when a database queue will bottleneck, or how much latency your users will experience. Sr. Architect solves this by running a custom tick-based traffic engine that dynamically calculates bottlenecks, drop rates, and server overload state in real time.</li>' +
+      'Traditional tools like Draw.io create nice pictures, but they cannot tell you when a server will crash, when a database queue will bottleneck, or how much latency your users will experience. Willi\'s Overengineer-inator solves this by running a custom tick-based traffic engine that dynamically calculates bottlenecks, drop rates, and server overload state in real time.</li>' +
       '<li><span class="text-orange"><strong>The Cost and Complexity of Testing</strong></span><br>' +
-      'Provisioning real AWS environments to run load tests is incredibly slow, expensive, and risky. Sr. Architect fills this gap by giving you a zero-cost sandbox to experiment instantly. Validate failure-recovery scenarios (like SQS decoupling or RDS replica scaling) in seconds, with absolutely zero AWS bills.</li>' +
+      'Provisioning real AWS environments to run load tests is incredibly slow, expensive, and risky. Willi\'s Overengineer-inator fills this gap by giving you a zero-cost sandbox to experiment instantly. Validate failure-recovery scenarios (like SQS decoupling or RDS replica scaling) in seconds, with absolutely zero AWS bills.</li>' +
       '<li><span class="text-blue"><strong>Hidden Billing Surprises</strong></span><br>' +
-      'Traditional tools do not connect drawing with financial realities. Sr. Architect integrates live cost estimators that factor in instance classes, database EBS IOPS, and serverless invocations with real-world regional modifiers, protecting developers from costly architecture designs.</li>' +
+      'Traditional tools do not connect drawing with financial realities. Willi\'s Overengineer-inator integrates live cost estimators that factor in instance classes, database EBS IOPS, and serverless invocations with real-world regional modifiers, protecting developers from costly architecture designs.</li>' +
       '</ul>',
     ],
   },
@@ -4202,7 +4202,7 @@ export const ARTICLES: DocArticle[] = [
       'We are building revolutionary capabilities to close the gap between drawing architectures, validating cost, and finding the most optimized solution for your organization. Here is a sneak peek at what is coming:',
       '<ul>' +
       '<li><span class="text-purple"><strong>1. Terraform State Imports (Coming Soon)</strong></span><br>' +
-      'What it offers: Upload any <code>.tf</code> configuration or <code>terraform.tfstate</code> file, and watch Sr. Architect automatically parse, map, and draw the entire AWS infrastructure onto the canvas instantly. No manual dragging required get a fully composed, stress-testable simulation environment in under 5 seconds!</li>' +
+      'What it offers: Upload any <code>.tf</code> configuration or <code>terraform.tfstate</code> file, and watch Willi\'s Overengineer-inator automatically parse, map, and draw the entire AWS infrastructure onto the canvas instantly. No manual dragging required get a fully composed, stress-testable simulation environment in under 5 seconds!</li>' +
       '<li><span class="text-orange"><strong>2. AI-Powered Architecture Suggestions (Game Changer!)</strong></span><br>' +
       'What it offers: Input your personalized business usecase, and our integrated AI agent will analyze your visual canvas topology. It provides tailored cost-performance optimizations such as recommending Lambda serverless transitions, adjusting database IOPS queues, or scaling ECS container replica thresholds to fit your usecase perfectly.</li>' +
       '<li><span class="text-blue"><strong>3. AI Multi-Cloud Builder & Comparative Benchmarking</strong></span><br>' +
@@ -4217,7 +4217,7 @@ export const ARTICLES: DocArticle[] = [
     icon: 'fas fa-project-diagram',
     summary: 'Learn how to compose architectures easily using drag-and-drop mechanics.',
     content: [
-      'Welcome to Sr. Architect! Building AWS architectures starts with the <strong>Left Service Palette</strong>.',
+      'Welcome to Willi\'s Overengineer-inator! Building AWS architectures starts with the <strong>Left Service Palette</strong>.',
       'To build your first topology, follow these simple steps:',
       '<ul>' +
       '<li><strong>Drag and Drop:</strong> Pull any available AWS service onto the high-tech 2D visual canvas to instantiate it.</li>' +
@@ -4239,7 +4239,7 @@ export const ARTICLES: DocArticle[] = [
     summary:
       'Understand the difference between the beginner-friendly Developer mode and the advanced Architect mode.',
     content: [
-      'Sr. Architect supports two experience modes tailored for different experience levels:',
+      'Willi\'s Overengineer-inator supports two experience modes tailored for different experience levels:',
       '<ul>' +
       '<li><span class="text-emerald"><strong>Developer Mode:</strong></span> Focused on system design learning. It simplifies the palette to 24+ core AWS services, simplifies configuration sliders, and disables granular billing complexity. Ideal for learning system behaviors and traffic flow dynamics.</li>' +
       '<li><span class="text-purple"><strong>Architect Mode:</strong></span> Focused on professional production-scale design. It exposes 65+ AWS services, adds deep configuration fields (LCU factors, compute classes, EBS types), and opens full cost breakdowns.</li>' +
@@ -4317,7 +4317,7 @@ export const ARTICLES: DocArticle[] = [
     summary:
       'Understand the multi-factor bottleneck simulation, load shedding, and failure modes.',
     content: [
-      'Rather than checking raw Requests-per-Second (RPS) thresholds, Sr. Architect simulates resource bottlenecks based on actual hardware limits and architecture behavior:',
+      'Rather than checking raw Requests-per-Second (RPS) thresholds, Willi\'s Overengineer-inator simulates resource bottlenecks based on actual hardware limits and architecture behavior:',
       '<ul>' +
       '<li><span class="text-purple"><strong>Multi-Factor Saturation:</strong></span> Nodes saturate when concurrent query queues, CPU pressure, or physical limits (like DB parallel queries, EC2 vCPU threads, or Lambda reserved concurrency) are exceeded.</li>' +
       '<li><span class="text-orange"><strong>Load Shedding & Throttling:</strong></span> Fully managed or serverless services (such as API Gateway, SQS, or DynamoDB) shed excess load. They return transient <code>HTTP 429 Too Many Requests</code> or <code>503 Service Unavailable</code> errors but remain online and recover immediately when traffic drops.</li>' +
@@ -4454,7 +4454,7 @@ export const ARTICLES: DocArticle[] = [
     content: [
       'The cost simulator maps real AWS billing pricing tables with dynamic geographic adjustments.',
       '<ul>' +
-      '<li><strong>Fine-Grained Regional Multipliers:</strong> Cloud costs differ heavily based on geography and service type. Instead of a single multiplier, Sr. Architect loads a dedicated JSON configuration file for each region (e.g. <code>us-west-1.json</code>).</li>' +
+      '<li><strong>Fine-Grained Regional Multipliers:</strong> Cloud costs differ heavily based on geography and service type. Instead of a single multiplier, Willi\'s Overengineer-inator loads a dedicated JSON configuration file for each region (e.g. <code>us-west-1.json</code>).</li>' +
       '<li><strong>Per-Service, Per-Parameter Flexibility:</strong> Each region JSON specifies multipliers for all 64+ AWS services and their individual cost-impacting parameters (like requests, CPU cores, GB storage, and data transfer). This allows you to customize and track cost structures with absolute precision.</li>' +
       '<li><strong>Default Adjustments:</strong> By default, service parameters inherit standard regional multipliers (e.g., <code>us-east-1</code> at 1.0x, <code>us-west-1</code> at 1.10x, <code>sa-east-1</code> at 1.38x).</li>' +
       '<li><strong>Currency Switching:</strong> Tap currency conversions live (USD, EUR, INR, GBP, JPY) to see local pricing equivalents instantly in the telemetry footer.</li>' +
@@ -4468,8 +4468,8 @@ export const ARTICLES: DocArticle[] = [
     icon: 'fas fa-exclamation-triangle',
     summary: 'Official disclaimer regarding simulation accuracy, AWS brand relation, and professional usage limits.',
     content: [
-      '<strong>Educational and Estimation Purposes Only:</strong> Sr. Architect is an educational system design simulator and rough cost estimator. All simulations, capacity calculations, latency graphs, and cost estimates are based on mathematical models and assumptions. They do not represent exact runtime behavior in production or official SLA commitments by Amazon Web Services (AWS).',
-      '<strong>No Affiliation with AWS:</strong> Sr. Architect is an independent, open-source project. It is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Amazon Web Services, Inc., Amazon.com, Inc., or any of their affiliates or subsidiaries. All product names, logos, and brands are property of their respective owners.',
+      '<strong>Educational and Estimation Purposes Only:</strong> Willi\'s Overengineer-inator is an educational system design simulator and rough cost estimator. All simulations, capacity calculations, latency graphs, and cost estimates are based on mathematical models and assumptions. They do not represent exact runtime behavior in production or official SLA commitments by Amazon Web Services (AWS).',
+      '<strong>No Affiliation with AWS:</strong> Willi\'s Overengineer-inator is an independent, open-source project. It is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Amazon Web Services, Inc., Amazon.com, Inc., or any of their affiliates or subsidiaries. All product names, logos, and brands are property of their respective owners.',
       '<strong>Use at Your Own Risk:</strong> The tools, calculations, and suggestions provided are for architectural planning and concepts. We accept no liability or responsibility for any direct or indirect business decisions, billing overcharges, security issues, or performance bottlenecks in your actual AWS deployments resulting from using this simulator.'
     ],
   },
@@ -4480,7 +4480,7 @@ export const ARTICLES: DocArticle[] = [
     icon: 'fas fa-user-shield',
     summary: 'Privacy policy detailing cookies, data collection, and local browser storage usage.',
     content: [
-      '<strong>Zero Personal Data Collection:</strong> Sr. Architect respects your privacy. We do not collect, store, or sell any personal data, email addresses, names, or contact information. You can use the entire simulator anonymously without registering or logging in.',
+      '<strong>Zero Personal Data Collection:</strong> Willi\'s Overengineer-inator respects your privacy. We do not collect, store, or sell any personal data, email addresses, names, or contact information. You can use the entire simulator anonymously without registering or logging in.',
       '<strong>Local-First Storage:</strong> Your canvas layout, tabs, settings, and custom simulation templates are saved directly in your browser using local storage (<code>localStorage</code>). This data never leaves your device and is not sent to our servers.',
       '<strong>Optional Analytics & API Logging:</strong> The live pricing API and any user feedback forms run entirely over secure channels. We do not track individual IP addresses or correlate user sessions. Any analytical data is aggregated and anonymized to help improve service library performance.',
       '<strong>Third-Party Links:</strong> Our documentation links to official AWS pricing sites and GitHub. We are not responsible for the privacy practices or contents of those external websites.'
@@ -4493,7 +4493,7 @@ export const ARTICLES: DocArticle[] = [
     icon: 'fas fa-file-contract',
     summary: 'Terms of use, license limitations, and open-source usage policies.',
     content: [
-      '<strong>Acceptance of Terms:</strong> By accessing and using Sr. Architect, you agree to these Terms & Conditions. If you do not agree, you must immediately cease using the website.',
+      '<strong>Acceptance of Terms:</strong> By accessing and using Willi\'s Overengineer-inator, you agree to these Terms & Conditions. If you do not agree, you must immediately cease using the website.',
       '<strong>Permitted Use:</strong> You are granted a non-exclusive, non-transferable, revocable license to use the simulator for learning, teaching, architectural modeling, and personal/professional planning. Scraping or overloading our pricing endpoints is strictly prohibited.',
       '<strong>Open Source License:</strong> The frontend application and simulation engine are open-source software. You may view, modify, and distribute the codebase in accordance with the terms of our license (Apache License 2.0 or equivalent, as detailed in our GitHub repository).',
       '<strong>Modifications to Services:</strong> We reserve the right to modify, suspend, or terminate any aspect of the simulator (including live pricing KV updates) at any time without notice. We are not liable to you or any third party for such modifications.'
