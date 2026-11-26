@@ -137,6 +137,8 @@ workers/
   aws-pricing-generator/  # Infrastructure — weekly AWS pricing rebuild (Cloudflare Workflow)
   daily-analytics/        # Infrastructure — daily FX rates + project analytics worker
 backend/           # Infrastructure — Express reader serving regional pricing from KV
+desktop/           # Electron app and macOS package build
+mcp/               # Local MCP server for the Architect canvas
 ```
 
 ---
@@ -184,6 +186,31 @@ npm install
 # Set process environment variables or use a local .env file
 node --env-file=.env validate-pricing.mjs
 ```
+
+### macOS desktop app
+
+Build the package on an Apple Silicon Mac with ARM64 Node.js 24 and npm. Run these commands from the repository root. The build downloads the pinned Electron and Node runtimes and writes an ad hoc-signed app for local use to `desktop/dist/`.
+
+```bash
+npm ci --prefix frontend
+npm ci --prefix desktop
+npm run package --prefix desktop
+```
+
+In Finder, open `desktop/dist/System Design Simulator-darwin-arm64/`. Copy `System Design Simulator.app` to a stable location such as `~/Applications` and open it. The app starts the simulator and pricing API on `127.0.0.1:4200`. The included `us-east-1` pricing snapshot works without Cloudflare credentials. Other regions require access to the configured pricing KV. Release port `4200` before opening the app if a web development server is running there.
+
+The app has its own project storage. To migrate a browser project, export its JSON from the browser and import it in the desktop app.
+
+#### Connect Claude Code to the desktop canvas
+
+With the app in `~/Applications`, run the command below to add the bundled MCP server to your Claude Code user configuration. Adjust the path if you install the app elsewhere. The launcher uses the Node runtime inside the bundle and runs independently of the checkout.
+
+```bash
+claude mcp add --transport stdio --scope user system-design-simulator -- \
+  "$HOME/Applications/System Design Simulator.app/Contents/Resources/simulator/system-design-simulator-mcp"
+```
+
+Open the Architect canvas, select **MCP**, and ask Claude Code to call `get_canvas_pairing`. Paste the one-time code in the app and select **Pair canvas**. Keep the canvas visible while Claude edits it. Only one local MCP process can listen on port `4301` at a time. [MCP tools and development workflow](mcp/README.md)
 
 ---
 
