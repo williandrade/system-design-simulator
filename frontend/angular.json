@@ -51,6 +51,13 @@
                 }
               ]
             },
+            "desktop": {
+              "optimization": {
+                "styles": {
+                  "inlineCritical": false
+                }
+              }
+            },
             "development": {
               "optimization": false,
               "extractLicenses": false,

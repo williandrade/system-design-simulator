@@ -1,0 +1,15 @@
+{
+  "name": "system-design-simulator-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Package the System Design Simulator for Apple Silicon Macs",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "package": "node scripts/package-macos.mjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0"
+  }
+}

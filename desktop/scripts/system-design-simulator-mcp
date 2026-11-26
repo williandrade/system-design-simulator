@@ -1,0 +1,5 @@
+#!/bin/sh
+
+set -eu
+resource_dir=$(CDPATH= cd -- "$(/usr/bin/dirname -- "$0")" && pwd -P)
+exec "$resource_dir/runtime/node" "$resource_dir/mcp/src/index.mjs" "$@"
