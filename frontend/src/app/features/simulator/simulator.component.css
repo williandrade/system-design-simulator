@@ -7,7 +7,6 @@
     "Inter", "SF Pro Display", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  --toolbar-height: 64px;
   --run-stats-mobile-collapsed: 56px;
   --run-stats-mobile-expanded: 104px;
 }
@@ -19,6 +18,8 @@ select {
 }
 
 .app-shell {
+  --mcp-action-height: 0px;
+  --toolbar-height: calc(64px + var(--mcp-action-height));
   height: 100vh;
   background:
     radial-gradient(circle at 12% 10%,
@@ -29,11 +30,15 @@ select {
       transparent 22%),
     linear-gradient(135deg, #f8f7ff 0%, #f5fbff 46%, #f7f8ff 100%);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto var(--mcp-action-height) minmax(0, 1fr);
   overflow: hidden;
   isolation: isolate;
   --palette-width: 312px;
   --inspector-width: 372px;
+}
+
+.app-shell.has-mcp-action {
+  --mcp-action-height: 28px;
 }
 
 .app-shell.left-collapsed {
@@ -154,9 +159,62 @@ select {
   display: none;
 }
 
+.mcp-status-dot {
+  flex: 0 0 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-slate-500);
+}
+
+.mcp-status-dot.connected {
+  background: var(--c-emerald-600);
+}
+
+:host-context(.dark) .mcp-status-dot {
+  background: var(--c-slate-400);
+}
+
+:host-context(.dark) .mcp-status-dot.connected {
+  background: var(--c-emerald);
+}
+
+.toolbar .mcp-toggle:focus-visible {
+  outline: 2px solid var(--c-violet);
+  outline-offset: -3px;
+}
+
+:host-context(.dark) .toolbar .mcp-toggle:focus-visible {
+  outline-color: var(--c-violet-300);
+}
+
+.mcp-action-status {
+  /* Keep the action visible above the mobile sidebar backdrop. */
+  z-index: 251;
+  min-width: 0;
+  background: var(--bg-app);
+  color: var(--text-app);
+}
+
+.mcp-action-status p {
+  box-sizing: border-box;
+  block-size: 100%;
+  margin: 0;
+  padding: 4px 16px 0;
+  overflow: auto hidden;
+  font-size: 12px;
+  line-height: 17px;
+  scrollbar-width: thin;
+  white-space: nowrap;
+}
+
+.mcp-action-status p:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
 .mcp-panel {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + var(--mcp-action-height) + 8px);
   right: 16px;
   z-index: 3;
   width: min(320px, calc(100vw - 32px));
@@ -200,6 +258,23 @@ select {
 .mcp-panel p {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+:host-context(.dark) .mcp-panel {
+  color: var(--text-app);
+  background: var(--input-bg);
+  border-color: var(--border-color);
+}
+
+:host-context(.dark) .mcp-panel :is(input, textarea) {
+  background: var(--bg-app);
+  border-color: var(--border-color);
+}
+
+:host-context(.dark) .toolbar .mcp-panel button {
+  color: var(--text-app);
+  background: var(--c-white-08);
+  border-color: var(--border-color);
 }
 
 .node-card.mcp-highlight,
@@ -4412,7 +4487,7 @@ small {
 }
 
 @media (max-width: 1366px) {
-  .app-shell:not(.left-collapsed):not(.right-collapsed) .action-btn {
+  .app-shell:not(.left-collapsed):not(.right-collapsed) .action-btn:not(.mcp-toggle) {
     padding: 8px;
     font-size: 0;
     /* Hide text, show only icons */

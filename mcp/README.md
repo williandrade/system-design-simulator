@@ -63,7 +63,7 @@ The runner creates each node, connection and annotation through separate MCP cal
 node mcp/scripts/demo/index.mjs compare .brain/evidencias/BASE-01/real-time-messaging-app.json /path/to/browser-export.json
 ```
 
-In another empty canvas, run `node mcp/scripts/demo/index.mjs burst`. The runner submits three independent node creations and a read together. Observe the three changes in order, including the initially offscreen CDN. It then checks that invalid Play, configuration and connection requests preserve the graph. To collect visual evidence, record the browser after pairing. The panel marker exposes `data-mcp-sequence`, `data-mcp-action`, `data-mcp-target` and `data-mcp-canvas` for correlating each action with the trace. If the session ends during a request, check the canvas state after reconnecting before deciding whether to send the request again.
+In another empty canvas, run `node mcp/scripts/demo/index.mjs burst`. The runner submits three independent node creations and a read together. Observe the three changes in order, including the initially offscreen CDN. It then checks that invalid Play, configuration and connection requests preserve the graph. To collect visual evidence, record the browser after pairing. The action status below the toolbar stays visible with the MCP panel closed. It exposes `data-mcp-sequence`, `data-mcp-action`, `data-mcp-target` and `data-mcp-canvas` for correlating each action with the trace. If the session ends during a request, check the canvas state after reconnecting before deciding whether to send the request again.
 
 ## LLM demonstration with Claude Code
 
