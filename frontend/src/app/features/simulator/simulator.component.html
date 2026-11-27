@@ -3,6 +3,7 @@
   [class.left-collapsed]="leftCollapsed"
   [class.right-collapsed]="rightCollapsed"
   [class.mobile-layout]="isMobileViewport"
+  [class.has-mcp-action]="mcpAvailable && mcp.lastAction"
   [class.run-stats-expanded-mobile]="isMobileViewport && runStatsExpanded"
   [class.sim-running]="mode === 'running'"
   [class.selection-mode]="ctrlPressed"
@@ -116,13 +117,19 @@
         @if (mcpAvailable) {
           <button
             type="button"
-            class="action-btn"
-            aria-controls="mcp-connection-panel"
+            class="action-btn mcp-toggle"
+            [attr.aria-controls]="showMcpPanel ? 'mcp-connection-panel' : null"
             [attr.aria-expanded]="showMcpPanel"
-            [disabled]="mcp.status !== 'disconnected'"
+            [attr.aria-description]="mcp.status | titlecase"
+            [title]="mcp.status | titlecase"
             (click)="showMcpPanel = !showMcpPanel"
           >
             MCP
+            <span
+              class="mcp-status-dot"
+              [class.connected]="mcp.status === 'connected'"
+              aria-hidden="true"
+            ></span>
           </button>
         }
         <button type="button" class="action-btn" (click)="fileInput.click()">
@@ -249,22 +256,29 @@
             <p>Ask your client to call <code>get_canvas_state</code> before editing. Keep this window visible.</p>
           }
         }
-        <p
-          role="status"
-          [attr.data-mcp-action]="mcp.lastAction?.tool"
-          [attr.data-mcp-target]="mcp.lastAction?.targetId"
-          [attr.data-mcp-sequence]="mcp.lastAction?.sequence"
-          [attr.data-mcp-canvas]="mcp.lastAction?.canvasId"
-        >
-          @if (mcp.lastAction; as action) {
-            {{ action.sequence }}. {{ action.description }}
-          } @else {
-            {{ mcp.message }}
-          }
-        </p>
+        @if (!mcp.lastAction) {
+          <p role="status">{{ mcp.message }}</p>
+        }
       </section>
     }
   </header>
+
+  <!-- The canvas checks that this feedback stays visible before acknowledging an MCP edit. -->
+  <div class="mcp-action-status" role="status">
+    @if (mcpAvailable) {
+      @if (mcp.lastAction; as action) {
+        <p
+          [attr.data-mcp-action]="action.tool"
+          [attr.data-mcp-target]="action.targetId"
+          [attr.data-mcp-sequence]="action.sequence"
+          [attr.data-mcp-canvas]="action.canvasId"
+          tabindex="0"
+        >
+          {{ action.sequence }}. {{ action.description }}
+        </p>
+      }
+    }
+  </div>
 
   @if (isMobileViewport && mobileSidebarOpen) {
     <div class="sidebar-backdrop" (click)="closeMobileSidebars()" aria-hidden="true"></div>
