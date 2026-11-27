@@ -62,6 +62,49 @@ describe('SimulationService', () => {
     assertHealthySnapshot();
   });
 
+  it('routes through a generic service while keeping its base simulation parameters', () => {
+    const users = factory.createNode('client', 0, 0);
+    Object.assign(users.config, {
+      requestRate: 60,
+      variableTraffic: true,
+      variableMinRps: 60,
+      variableMaxRps: 60,
+      syncRpsToServices: true,
+    });
+    const generic = factory.createNode('generic', 300, 0);
+    const gateway = factory.createNode('apiGateway', 600, 0);
+    const nodes = [users, generic, gateway];
+    const connections = [
+      factory.createConnection(users.id, 'out-http', generic.id, 'in-http', 'http'),
+      factory.createConnection(generic.id, 'out-http', gateway.id, 'in-http', 'http'),
+    ];
+
+    sim.start(nodes, connections);
+    vi.advanceTimersByTime(TICK_MS * 7);
+    const before = sim.snapshot$.value;
+    const firstGeneric = before.nodes.find((node) => node.id === generic.id)!;
+    expect(firstGeneric.config.throughput).toBe(100);
+    expect(sim.capacityInfo(firstGeneric).capacity).toBe(100);
+    const firstGateway = before.nodes.find((node) => node.id === gateway.id)!;
+    expect(firstGateway.config.throughput).toBe(60);
+    expect(firstGateway.metrics.received).toBeGreaterThan(0);
+
+    sim.stop();
+    const stoppedGeneric = sim.snapshot$.value.nodes.find((node) => node.id === generic.id)!;
+    expect(stoppedGeneric.config.throughput).toBe(100);
+    const genericMetadata = {
+      label: 'Partner API',
+      properties: [{ key: 'latency', value: '9999' }],
+    };
+    const imported = { ...generic, genericMetadata, config: { ...generic.config, latency: 9999 } };
+    sim.start([users, imported, gateway], connections);
+    vi.advanceTimersByTime(TICK_MS * 7);
+    const after = sim.snapshot$.value.nodes.find((node) => node.id === generic.id)!;
+    expect(after.genericMetadata).toEqual(genericMetadata);
+    expect(after.config.latency).toBe(40);
+    expect(after.metrics).toEqual(firstGeneric.metrics);
+  });
+
   it('does not mutate the caller’s original node objects', () => {
     const { nodes, connections } = clientToEc2();
     const originalStatus = nodes[1].status;
@@ -94,6 +137,17 @@ describe('SimulationService', () => {
     sim.stop();
     expect(sim.snapshot$.value.mode).toBe('idle');
     expect(sim.snapshot$.value.packets).toEqual([]);
+  });
+
+  it('does not re-emit the stopped graph when already idle', () => {
+    const { nodes, connections } = clientToEc2();
+    sim.start(nodes, connections);
+    sim.stop();
+
+    const stoppedGraph = sim.snapshot$.value;
+    sim.stop();
+
+    expect(sim.snapshot$.value).toBe(stoppedGraph);
   });
 
   describe('dynamic RPS helpers', () => {

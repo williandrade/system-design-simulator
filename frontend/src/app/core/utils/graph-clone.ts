@@ -43,6 +43,7 @@ export function cloneGraph(
   const nodes = srcNodes.map((node): ArchitectureNode => {
     const id = generateId();
     idMap.set(node.id, id);
+    const { genericMetadata } = node;
     return {
       ...node,
       id,
@@ -51,6 +52,12 @@ export function cloneGraph(
       selected: false,
       status: 'normal',
       config: { ...node.config },
+      ...(node.type === 'generic' && genericMetadata && {
+        genericMetadata: {
+          label: genericMetadata.label,
+          properties: genericMetadata.properties.map((property) => ({ ...property })),
+        },
+      }),
       ports: node.ports.map((port) => ({ ...port })),
       metrics: options.emptyMetrics(),
     };

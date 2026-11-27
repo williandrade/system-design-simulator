@@ -1,0 +1,57 @@
+<label class="label-field">
+  <span>Label</span>
+  <input
+    type="text"
+    placeholder="Service label"
+    [disabled]="disabled()"
+    [ngModel]="label()"
+    (ngModelChange)="updateLabel($event)"
+  />
+</label>
+
+<fieldset class="properties" [disabled]="disabled()">
+  <legend>Properties</legend>
+  @for (property of visibleProperties(); track $index; let index = $index) {
+    <div class="property-row">
+      <label>
+        <span>Key</span>
+        <input
+          #propertyKey
+          type="text"
+          [attr.aria-label]="'Key ' + (index + 1)"
+          [ngModel]="property.key"
+          (ngModelChange)="updateProperty(index, 'key', $event)"
+        />
+      </label>
+      <label>
+        <span>Value</span>
+        <input
+          type="text"
+          [attr.aria-label]="'Value ' + (index + 1)"
+          [ngModel]="property.value"
+          (ngModelChange)="updateProperty(index, 'value', $event)"
+        />
+      </label>
+      @if (properties().length) {
+        <button
+          class="remove-property"
+          type="button"
+          [attr.aria-label]="'Remove property ' + (index + 1)"
+          title="Remove property"
+          (click)="removeProperty(index)"
+        >
+          <i class="fas fa-xmark" aria-hidden="true"></i>
+        </button>
+      }
+    </div>
+  }
+  <button
+    class="add-property"
+    type="button"
+    aria-label="Add property"
+    title="Add property"
+    (click)="addProperty()"
+  >
+    <i class="fas fa-plus" aria-hidden="true"></i>
+  </button>
+</fieldset>

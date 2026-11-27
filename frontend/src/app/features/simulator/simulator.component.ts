@@ -72,6 +72,7 @@ import { GraphBuilderService } from '../../core/services/graph-builder.service';
 import { evaluateVisibleIf } from '../../core/utils/visible-if';
 import { HistoryStack } from '../../core/utils/history-stack';
 import { cloneGraph, newId, selectSubgraph } from '../../core/utils/graph-clone';
+import { hasValidGenericServiceMetadata } from '../../core/utils/generic-service-metadata';
 import { downstreamNodeIds } from '../../core/utils/graph-traversal';
 import { isFieldLocked } from '../../core/utils/field-lock';
 import { NodeHealth, evaluateNodeHealth } from '../../core/utils/node-health';
@@ -89,6 +90,10 @@ import {
 import { Challenge } from '../../core/models/challenge.model';
 import { ChallengePanelComponent } from './challenge/challenge-panel.component';
 import { OnboardingOverlayComponent } from './challenge/onboarding-overlay.component';
+import {
+  GenericServiceEditorComponent,
+  GenericServiceMetadataChange,
+} from './generic-service-editor/generic-service-editor.component';
 import { CanvasMcpConnection } from './mcp/canvas-mcp-connection';
 import { McpSetup, McpSetupComponent } from './mcp/mcp-setup.component';
 import {
@@ -141,6 +146,7 @@ interface SelectField {
     ChallengePanelComponent,
     OnboardingOverlayComponent,
     McpSetupComponent,
+    GenericServiceEditorComponent,
   ],
   templateUrl: './simulator.component.html',
   styleUrls: ['./simulator.component.css'],
@@ -1050,6 +1056,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   validationMessage =
     'Drag AWS services onto the canvas, then connect output ports to input ports.';
   validationTone: 'neutral' | 'success' | 'error' = 'neutral';
+  importFailed = false;
   zoom = 1;
   pan = { x: 0, y: 0 };
   readonly minimapMinSize = 1400;
@@ -1198,7 +1205,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       );
     }
     this.pushHistory();
-    this.applyNumericConfig([nodeId], key, value);
+    this.applyServiceConfig([nodeId], { [key]: value });
     this.selectNode(nodeId);
     this.rightCollapsed = false;
     this.onConfigChange();
@@ -1794,6 +1801,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   openDocsForService(type: string): void {
+    if (type === 'generic') return;
     const docsUrl = `${window.location.origin}/docs?service=${type}`;
     window.open(docsUrl, '_blank', 'noopener,noreferrer');
   }
@@ -1834,7 +1842,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get selectedConfigFields(): ConfigField[] {
-    if (!this.selectedNode) {
+    if (!this.selectedNode || this.selectedNode.type === 'generic') {
       return [];
     }
     const specific = this.serviceConfigFields[this.selectedNode.type] ?? [];
@@ -1930,7 +1938,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get costBreakdown(): CostBreakdown | null {
     const node = this.selectedNode;
-    if (!node) return null;
+    if (!node || node.type === 'generic') return null;
 
     const configSignature = JSON.stringify(node.config);
     const cache = this._costBreakdownCache;
@@ -2063,6 +2071,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const devServices = new Set([
       'client',
+      'generic',
       'route53',
       'cloudfront',
       'apiGateway',
@@ -2094,6 +2103,10 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.roleMode === 'developer') {
       services = services.filter((s) => devServices.has(s.type));
+      const subset = this.challengeService.activePaletteSubset;
+      if (subset && !subset.includes('generic')) {
+        services = services.filter((s) => s.type !== 'generic');
+      }
     } else {
       // Architect Mode
       if (!this.showAllServices) {
@@ -2141,6 +2154,10 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.globalCurrency,
       this.globalRegion,
     );
+  }
+
+  get hasGenericServices(): boolean {
+    return this.nodes.some((node) => node.type === 'generic');
   }
 
   get totalCostFormatted(): string {
@@ -2196,6 +2213,11 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.awsCatalog.getByType(type).glyphUrl;
   }
 
+  nodeSubtitle(node: ArchitectureNode): string {
+    if (node.type === 'generic') return node.genericMetadata?.label.trim() || 'Generic';
+    return node.type === 'client' ? 'Users' : node.type;
+  }
+
   /** Reason text shown wherever a region-unavailable service is rendered disabled. */
   readonly regionUnavailableReason = 'Not available or SKU absent for the selected region';
 
@@ -2218,7 +2240,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     const seen = new Set<AwsServiceType>();
     const out: { type: AwsServiceType; name: string; overview: string }[] = [];
     for (const node of this.nodes) {
-      if (node.type === 'client' || seen.has(node.type)) {
+      if (node.type === 'client' || node.type === 'generic' || seen.has(node.type)) {
         continue;
       }
       seen.add(node.type);
@@ -2251,7 +2273,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     const nodeCosts = new Map<string, number>();
     let totalUsd = 0;
     for (const node of this.nodes) {
-      if (node.type === 'client') {
+      if (node.type === 'client' || node.type === 'generic') {
         continue;
       }
       const usd = this.costService.calculateNodeCostUsd(node, this.globalRegion, this.nodes);
@@ -2269,7 +2291,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     >();
 
     for (const node of this.nodes) {
-      if (node.type === 'client') {
+      if (node.type === 'client' || node.type === 'generic') {
         continue;
       }
       if (!grouped.has(node.type)) {
@@ -2463,7 +2485,11 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Rebuild every tab from a saved workspace on load. */
   private restoreWorkspace(ws: PersistedWorkspace): void {
     const defaultZoom = this.isMobileViewport ? 0.65 : 0.85;
-    this.tabs = ws.tabs.map((pt, i) => fromPersistedTab(pt, i, defaultZoom));
+    this.tabs = ws.tabs.map((pt, i) => {
+      const tab = fromPersistedTab(pt, i, defaultZoom);
+      tab.nodes = tab.nodes.map((node) => this.factory.withFixedGenericConfig(node));
+      return tab;
+    });
     const idx = Math.min(Math.max(ws.activeIndex ?? 0, 0), this.tabs.length - 1);
     this.loadTabState(idx);
     this.resetHistory();
@@ -2850,6 +2876,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       if (targetNode && targetPort) {
         const sourceDef = this.awsCatalog.getByType(this.activePort.node.type);
         if (
+          targetNode.type !== 'generic' &&
           sourceDef.behavior.allowedTargets.length > 0 &&
           !sourceDef.behavior.allowedTargets.includes(targetNode.type)
         ) {
@@ -2883,6 +2910,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const sourceDef = this.awsCatalog.getByType(this.activePort.node.type);
     if (
+      node.type !== 'generic' &&
       sourceDef.behavior.allowedTargets.length > 0 &&
       !sourceDef.behavior.allowedTargets.includes(node.type)
     ) {
@@ -2915,8 +2943,13 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.connections,
     );
 
-    // If exact port match fails, auto-correct by finding ANY valid port combination between these two nodes
-    if (!result.allowed && allowAlternative) {
+    // Generic ports already accept every port type. Keep the explicit port choice for those links.
+    if (
+      !result.allowed &&
+      allowAlternative &&
+      sourceNode.type !== 'generic' &&
+      targetNode.type !== 'generic'
+    ) {
       const allOutputs = sourceNode.ports.filter((p) => p.direction === 'output');
       const allInputs = targetNode.ports.filter((p) => p.direction === 'input');
 
@@ -2953,7 +2986,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       finalSourcePort.id,
       targetNode.id,
       finalTargetPort.id,
-      this.validation.connectionTypeFor(result.ruleId, finalSourcePort.type),
+      result.connectionType ?? finalSourcePort.type,
       result.message,
     );
     this.connections = [...this.connections, connection];
@@ -3237,17 +3270,23 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   importProject(event: any): void {
     const file = event.target.files[0];
     if (!file) return;
+    this.importFailed = false;
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const project = JSON.parse(e.target?.result as string) as ArchitectureProject;
+        if (!Array.isArray(project?.nodes) || !project.nodes.every(hasValidGenericServiceMetadata)) {
+          this.importFailed = true;
+          return;
+        }
         this.simulation.stop();
         this.applyProject(project);
         this.setMessage('Project imported successfully.', 'success');
       } catch {
-        this.setMessage('Invalid project file format.', 'error');
+        this.importFailed = true;
       }
     };
+    reader.onerror = () => (this.importFailed = true);
     reader.readAsText(file);
     event.target.value = '';
   }
@@ -3431,7 +3470,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     const selectedId = this.selectedNode.id;
     this.pushHistory(`config:${selectedId}:${key}`);
 
-    this.applyNumericConfig(this.selectedNodeIds, key, numValue);
+    this.applyServiceConfig(this.selectedNodeIds, { [key]: numValue });
 
     // Client special handling: propagate RPS to downstream services if sync is on
     if (
@@ -3470,13 +3509,11 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.onConfigChange();
   }
 
-  private applyNumericConfig(
-    nodeIds: readonly string[],
-    key: keyof ServiceConfig,
-    value: number | null,
-  ): void {
+  private applyServiceConfig(nodeIds: readonly string[], updates: Partial<ServiceConfig>): void {
     this.nodes = this.nodes.map((node) =>
-      nodeIds.includes(node.id) ? { ...node, config: { ...node.config, [key]: value } } : node,
+      node.type !== 'generic' && nodeIds.includes(node.id)
+        ? { ...node, config: { ...node.config, ...updates } }
+        : node,
     );
   }
 
@@ -3561,27 +3598,15 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
         (p: any) => p.key === 'model' && p.visibleIf?.includes(`'${value}'`),
       );
       const firstModel = modelParam?.default ?? modelParam?.options?.[0]?.value;
-      this.nodes = this.nodes.map((node) =>
-        this.selectedNodeIds.includes(node.id)
-          ? {
-              ...node,
-              config: {
-                ...node.config,
-                provider: value,
-                ...(firstModel !== undefined ? { model: firstModel } : {}),
-              },
-            }
-          : node,
-      );
+      this.applyServiceConfig(this.selectedNodeIds, {
+        provider: value,
+        ...(firstModel !== undefined ? { model: firstModel } : {}),
+      });
       this.onConfigChange();
       return;
     }
 
-    this.nodes = this.nodes.map((node) =>
-      this.selectedNodeIds.includes(node.id)
-        ? { ...node, config: { ...node.config, [key]: value } }
-        : node,
-    );
+    this.applyServiceConfig(this.selectedNodeIds, { [key]: value });
     this.onConfigChange();
   }
 
@@ -3610,7 +3635,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     const demand = this.simulation.estimateDemand(graph, this.connections);
     const snapshot: Record<string, Record<string, unknown>> = {};
     this.nodes = this.nodes.map((n) => {
-      if (!downstream.has(n.id)) return n;
+      if (!downstream.has(n.id) || n.type === 'generic') return n;
       const nodeDemand = Math.max(1, Math.round((demand.get(n.id) ?? 0) * 100) / 100);
       const sizing = this.simulation.autoSizeForDemand(n, nodeDemand) ?? {};
       const updates: Record<string, unknown> = {
@@ -3640,7 +3665,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     const snapshot: Record<string, unknown> = client?.config['_syncSnapshot'] || {};
     this.nodes = this.nodes.map((n) => {
       const snap = snapshot[n.id];
-      if (snap === undefined) return n;
+      if (snap === undefined || n.type === 'generic') return n;
       const { _designThroughput, _dynFactor, ...rest } = n.config;
       const cfg: Record<string, unknown> = { ...rest };
       // Legacy snapshots stored a bare throughput number; new ones store the
@@ -3679,12 +3704,23 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   updateNodeName(value: string): void {
-    const targetId = this.selectedNodeIds[0];
-    if (!targetId) {
-      return;
-    }
+    const node = this.selectedNode;
+    if (!node || (node.type === 'generic' && this.mode !== 'idle')) return;
+    const targetId = node.id;
     this.pushHistory(`rename:${targetId}`);
-    this.nodes = this.nodes.map((node) => (node.id === targetId ? { ...node, name: value } : node));
+    this.nodes = this.nodes.map((candidate) =>
+      candidate.id === targetId ? { ...candidate, name: value } : candidate,
+    );
+  }
+
+  updateGenericMetadata({ metadata, editKey }: GenericServiceMetadataChange): void {
+    const node = this.selectedNode;
+    if (node?.type !== 'generic' || this.mode !== 'idle') return;
+
+    this.pushHistory(editKey ? `generic:${node.id}:${editKey}` : undefined);
+    this.nodes = this.nodes.map((candidate) =>
+      candidate.id === node.id ? { ...candidate, genericMetadata: metadata } : candidate,
+    );
   }
 
   onConfigChange(): void {
@@ -3973,7 +4009,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
           return { ...n, config: { ...n.config, requestRate: 100 } };
         }
       }
-      return n;
+      return this.factory.withFixedGenericConfig(n);
     });
     this.connections = project.connections;
     this.annotations = project.annotations || [];

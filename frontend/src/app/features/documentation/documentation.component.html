@@ -98,7 +98,7 @@
             <strong>Know about AWS services</strong>
           </div>
           <select [ngModel]="serviceType" (ngModelChange)="openServiceDoc($event)" aria-label="Choose a service guide">
-            @for (service of awsCatalog.services; track service) {
+            @for (service of documentedServices; track service.type) {
             <option [value]="service.type">{{ service.name }} - {{ service.category }}</option>
             }
           </select>
@@ -333,7 +333,7 @@
             <div class="services-directory-header glass-panel">
               <div>
                 <span class="section-kicker mini">Complete AWS Service Guide</span>
-                <h3>Browse all {{ awsCatalog.services.length }} supported services</h3>
+                <h3>Browse all {{ documentedServices.length }} supported services</h3>
                 <p>
                   Each guide includes a beginner-friendly explanation, when-to-use guidance,
                   a practical example, and a simulator connectivity diagram.

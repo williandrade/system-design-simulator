@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ArchitectureConnection, ArchitectureNode, ConnectionRule, PortType, ServicePort, ValidationResult } from '../models/architecture.model';
+import { ArchitectureConnection, ArchitectureNode, ConnectionRule, ServicePort, ValidationResult } from '../models/architecture.model';
 import awsServicesConfig from '../config/aws-services.json';
 import { VPC_ATTACHABLE_TYPES } from '../constants/connection-rules.constants';
 
@@ -49,7 +49,7 @@ export class ValidationRuleService {
       return { allowed: false, message: 'Connections must start from an output port and end at an input port.' };
     }
 
-    if (source.type === 'vpc' && !VPC_ATTACHABLE_TYPES.includes(target.type)) {
+    if (source.type === 'vpc' && target.type !== 'generic' && !VPC_ATTACHABLE_TYPES.includes(target.type)) {
       return { allowed: false, message: 'VPC is a network boundary and can only contain network-aware services.' };
     }
 
@@ -61,6 +61,15 @@ export class ValidationRuleService {
     );
     if (duplicate) {
       return { allowed: false, message: 'That connection already exists.' };
+    }
+
+    if (source.type === 'generic' || target.type === 'generic') {
+      const connectionType = source.type === 'generic' ? targetPort.type : sourcePort.type;
+      return {
+        allowed: true,
+        connectionType,
+        message: `${connectionType.toUpperCase()} connection through a generic service.`,
+      };
     }
 
     const rule = this.rules.find((candidate) => {
@@ -82,10 +91,11 @@ export class ValidationRuleService {
       };
     }
 
-    return { allowed: true, message: rule.description, ruleId: rule.id };
-  }
-
-  connectionTypeFor(ruleId: string | undefined, fallback: PortType): PortType {
-    return this.rules.find((rule) => rule.id === ruleId)?.connectionType ?? fallback;
+    return {
+      allowed: true,
+      message: rule.description,
+      ruleId: rule.id,
+      connectionType: rule.connectionType,
+    };
   }
 }

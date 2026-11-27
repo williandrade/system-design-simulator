@@ -500,7 +500,7 @@ export class SimulationService {
 
   start(nodes: ArchitectureNode[], connections: ArchitectureConnection[]): void {
     this.nodes = nodes.map((node) => ({
-      ...node,
+      ...this.factory.withFixedGenericConfig(node),
       metrics: this.factory.emptyMetrics(),
       status: 'normal' as HealthStatus,
     }));
@@ -592,6 +592,8 @@ export class SimulationService {
   }
 
   stop(): void {
+    if (this.snapshot$.value.mode === 'idle') return;
+
     this.loop?.unsubscribe();
     this.loop = undefined;
     this.writeVariableTrafficMean();
@@ -643,7 +645,7 @@ export class SimulationService {
       if (node.config['syncRpsToServices']) {
         const downstream = this.collectDownstream(node.id);
         for (const target of this.nodes) {
-          if (downstream.has(target.id)) {
+          if (target.type !== 'generic' && downstream.has(target.id)) {
             const factor = Number(target.config['_dynFactor']) || 1;
             target.config.throughput = Math.round(mean * factor * 100) / 100;
           }
@@ -1300,7 +1302,7 @@ export class SimulationService {
           downstreamCache.set(node.id, downstream);
         }
         for (const target of this.nodes) {
-          if (downstream.has(target.id)) {
+          if (target.type !== 'generic' && downstream.has(target.id)) {
             const factor = Number(target.config['_dynFactor']) || 1;
             target.config.throughput = Math.round(sampled * factor * 100) / 100;
           }

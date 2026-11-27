@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ProjectStorageService, PersistedWorkspace } from './project-storage.service';
 import { ArchitectureProject } from '../models/architecture.model';
+import { makeConn, makeNode } from '../testing/fixtures';
+import { hasValidGenericServiceMetadata } from '../utils/generic-service-metadata';
 
 class MemoryStorage {
   private store = new Map<string, string>();
@@ -39,6 +41,19 @@ const workspace: PersistedWorkspace = {
   ],
 };
 
+const generic = makeNode('billing', 'generic');
+const genericWithMetadata = {
+  ...generic,
+  genericMetadata: {
+    label: 'Partner API',
+    properties: [
+      { key: 'owner', value: 'Payments' },
+      { key: 'owner', value: '' },
+      { key: '', value: '' },
+    ],
+  },
+};
+
 describe('ProjectStorageService', () => {
   let service: ProjectStorageService;
 
@@ -55,6 +70,21 @@ describe('ProjectStorageService', () => {
     it('round-trips a saved project through loadLocal', () => {
       service.save(project);
       expect(service.loadLocal()).toEqual(project);
+    });
+
+    it('keeps ordered generic rows, duplicate keys, and incomplete edits in a saved project', () => {
+      const withGeneric = { ...project, nodes: [genericWithMetadata, generic] };
+      service.save(withGeneric);
+      expect(service.loadLocal()).toEqual(withGeneric);
+    });
+
+    it('uses default generic metadata when the saved single project contains malformed metadata', () => {
+      const storedProject = {
+        ...project,
+        nodes: [{ ...generic, genericMetadata: null }],
+      };
+      localStorage.setItem('aws-system-design-simulator-project', JSON.stringify(storedProject));
+      expect(service.loadLocal()).toEqual({ ...project, nodes: [generic] });
     });
 
     it('returns null when no project is stored', () => {
@@ -79,6 +109,47 @@ describe('ProjectStorageService', () => {
       expect(service.loadWorkspace()).toEqual(workspace);
     });
 
+    it('restores populated tabs alongside an older empty tab without nodes', () => {
+      const emptyTab = { ...workspace.tabs[0], nodes: undefined };
+      const populatedTab = { ...workspace.tabs[0], id: 't2', nodes: [genericWithMetadata] };
+      localStorage.setItem(
+        'aws-system-design-simulator-workspace',
+        JSON.stringify({ ...workspace, tabs: [emptyTab, populatedTab] }),
+      );
+
+      expect(service.loadWorkspace()).toEqual({
+        ...workspace,
+        tabs: [workspace.tabs[0], populatedTab],
+      });
+    });
+
+    it('recovers a damaged generic node while preserving other nodes, edges, and tabs', () => {
+      const damaged = makeNode('damaged', 'generic');
+      const users = makeNode('users', 'client');
+      const tab = {
+        ...workspace.tabs[0],
+        nodes: [users, genericWithMetadata, damaged],
+        connections: [makeConn(users.id, damaged.id)],
+      };
+      const cleanTab = { ...workspace.tabs[0], id: 't2' };
+      const storedWorkspace = {
+        ...workspace,
+        tabs: [
+          {
+            ...tab,
+            nodes: [
+              users,
+              genericWithMetadata,
+              { ...damaged, genericMetadata: { label: 'Invalid', properties: [{ key: 'owner', value: 1 }] } },
+            ],
+          },
+          cleanTab,
+        ],
+      };
+      localStorage.setItem('aws-system-design-simulator-workspace', JSON.stringify(storedWorkspace));
+      expect(service.loadWorkspace()).toEqual({ ...workspace, tabs: [tab, cleanTab] });
+    });
+
     it('returns null when no workspace is stored', () => {
       expect(service.loadWorkspace()).toBeNull();
     });
@@ -95,5 +166,23 @@ describe('ProjectStorageService', () => {
       expect(service.loadWorkspace()).toBeNull();
       expect(service.loadLocal()).toEqual(project);
     });
+  });
+});
+
+describe('generic service metadata import validation', () => {
+  it('accepts absent metadata, ordered editable rows, and existing AWS nodes', () => {
+    expect(hasValidGenericServiceMetadata(generic)).toBe(true);
+    expect(hasValidGenericServiceMetadata(genericWithMetadata)).toBe(true);
+    expect(hasValidGenericServiceMetadata(makeNode('users', 'client'))).toBe(true);
+  });
+
+  it.each([
+    null,
+    { label: false, properties: [] },
+    { label: '', properties: { owner: 'Payments' } },
+    { label: '', properties: [null] },
+    { label: '', properties: [{ key: 'owner', value: 1 }] },
+  ])('rejects malformed metadata (%j)', (genericMetadata) => {
+    expect(hasValidGenericServiceMetadata({ ...generic, genericMetadata })).toBe(false);
   });
 });

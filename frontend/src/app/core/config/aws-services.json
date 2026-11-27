@@ -6675,6 +6675,16 @@
         }
       ],
       "description": "Amazon Lightsail provides easy-to-use VPS bundles with flat-rate pricing that include compute, SSD storage, and a data transfer allowance."
+    },
+    {
+      "type": "generic",
+      "name": "Generic Service",
+      "category": "Generic",
+      "inputs": ["http"],
+      "outputs": ["http"],
+      "mandatoryInput": false,
+      "mandatoryOutput": false,
+      "description": "Represents a component with a custom label and properties."
     }
   ]
 }

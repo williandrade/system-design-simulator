@@ -1,4 +1,5 @@
 export type AwsServiceType =
+  | 'generic'
   | 'client'
   | 'route53'
   | 'cloudfront'
@@ -161,7 +162,8 @@ export interface AwsServiceDefinition {
     | 'Security, Identity, & Compliance'
     | 'Media Services'
     | 'Internet of Things'
-    | 'Users';
+    | 'Users'
+    | 'Generic';
   description: string;
   color: string;
   icon: string;
@@ -182,6 +184,16 @@ export interface AwsServiceDefinition {
   };
 }
 
+export interface GenericServiceProperty {
+  key: string;
+  value: string;
+}
+
+export interface GenericServiceMetadata {
+  label: string;
+  properties: GenericServiceProperty[];
+}
+
 export interface ArchitectureNode {
   id: string;
   type: AwsServiceType;
@@ -189,6 +201,7 @@ export interface ArchitectureNode {
   x: number;
   y: number;
   config: ServiceConfig;
+  genericMetadata?: GenericServiceMetadata;
   ports: ServicePort[];
   status: HealthStatus;
   metrics: ServiceMetrics;
@@ -243,6 +256,7 @@ export interface ValidationResult {
   allowed: boolean;
   message: string;
   ruleId?: string;
+  connectionType?: PortType;
 }
 
 export interface ConnectionRule {

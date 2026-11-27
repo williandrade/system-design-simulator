@@ -34,10 +34,16 @@ export class ArchitectureFactoryService {
       x,
       y,
       config: { ...definition.defaults },
+      ...(type === 'generic' ? { genericMetadata: { label: '', properties: [] } } : {}),
       ports: definition.ports.map((port) => ({ ...port })),
       status: 'normal',
       metrics: { ...emptyMetrics },
     };
+  }
+
+  withFixedGenericConfig(node: ArchitectureNode): ArchitectureNode {
+    if (node.type !== 'generic') return node;
+    return { ...node, config: { ...this.catalog.getByType('generic').defaults } };
   }
 
   createConnection(

@@ -212,6 +212,12 @@
         </button>
       </div>
     </div>
+    @if (importFailed) {
+      <div class="import-error">
+        <span role="alert">Could not import this project. Check the JSON file and try again.</span>
+        <button type="button" (click)="importFailed = false">Dismiss</button>
+      </div>
+    }
     @if (mcpAvailable && showMcpPanel) {
       <section id="mcp-connection-panel" class="mcp-panel" aria-label="MCP connection">
         <strong>MCP connection</strong>
@@ -315,7 +321,7 @@
           <span>⌕</span>
           <input
             [(ngModel)]="paletteSearch"
-            placeholder="Search AWS services"
+            placeholder="Search services"
             aria-label="Search services"
           />
         </label>
@@ -610,7 +616,7 @@
                   type="button"
                   class="port input"
                   [class.selected]="isPortSelected(node.id, port.id)"
-                  [title]="port.direction + ' ' + port.type"
+                  [title]="node.type === 'generic' ? 'Input (any type)' : port.direction + ' ' + port.type"
                   fNodeInput
                   [fInputId]="connectorId(node.id, port.id)"
                   fInputConnectableSide="left"
@@ -622,7 +628,7 @@
                   type="button"
                   class="port output"
                   [class.selected]="isPortSelected(node.id, port.id)"
-                  [title]="port.direction + ' ' + port.type"
+                  [title]="node.type === 'generic' ? 'Output (any type)' : port.direction + ' ' + port.type"
                   fNodeOutput
                   [fOutputId]="connectorId(node.id, port.id)"
                   fOutputConnectableSide="right"
@@ -646,9 +652,13 @@
                   ></div>
                 </span>
                 <div>
-                  <h3>{{ node.name }}</h3>
+                  <h3 [attr.title]="node.type === 'generic' ? node.name : null">{{ node.name }}</h3>
                   <div class="node-subtitle-row">
-                    <small>{{ node.type === 'client' ? 'Users' : node.type }}</small>
+                    <small
+                      [class.generic-node-subtitle]="node.type === 'generic'"
+                      [attr.title]="node.type === 'generic' ? nodeSubtitle(node) : null"
+                      >{{ nodeSubtitle(node) }}</small
+                    >
                   </div>
                 </div>
               </div>
@@ -955,7 +965,12 @@
                     <span class="service-category-tag">{{ selectedDefinition?.category }}</span>
                     @if (roleMode === 'architect') {
                       <span class="service-cost-badge">
-                        <i class="fas fa-coins"></i> {{ getNodeCostFormatted(node) }}/mo
+                        <i class="fas fa-coins" aria-hidden="true"></i>
+                        @if (node.type === 'generic') {
+                          Not estimated
+                        } @else {
+                          {{ getNodeCostFormatted(node) }}/mo
+                        }
                       </span>
                     }
                   </div>
@@ -975,14 +990,26 @@
             </div>
 
             <!-- Full-width Name Field inside identity card -->
-            <div class="name-input-wrapper" (mousemove)="onMouseMove($event)">
+            <label
+              class="name-input-wrapper"
+              [class.generic-name-input]="node.type === 'generic'"
+              (mousemove)="onMouseMove($event)"
+            >
               <span class="name-input-label">Name</span>
               <input
                 [ngModel]="node.name"
                 (ngModelChange)="updateNodeName($event)"
+                [disabled]="node.type === 'generic' && mode !== 'idle'"
                 placeholder="Service name"
               />
-            </div>
+            </label>
+            @if (node.type === 'generic') {
+              <app-generic-service-editor
+                [metadata]="node.genericMetadata"
+                [disabled]="mode !== 'idle'"
+                (metadataChange)="updateGenericMetadata($event)"
+              ></app-generic-service-editor>
+            }
           </div>
 
           @if (isServiceUnavailable(node.type)) {
@@ -994,7 +1021,16 @@
               >
             </div>
           }
-          @if (selectedDefinition?.description) {
+          @if (node.type === 'generic') {
+            <div class="service-desc-section">
+              <p class="desc-text">
+                Uses fixed simulation settings. Properties are descriptive.
+                @if (mode !== 'idle') {
+                  Stop the simulation to edit this service.
+                }
+              </p>
+            </div>
+          } @else if (selectedDefinition?.description) {
             <div class="service-desc-section">
               <p class="desc-text">
                 <i
@@ -1103,7 +1139,9 @@
                     }
                   </strong>
                 </span>
-                <small>{{ capInfo.sourceLabel }}</small>
+                <small>{{
+                  node.type === 'generic' ? 'Generic simulation settings' : capInfo.sourceLabel
+                }}</small>
                 @if (capInfo.liveRps > 0 && capInfo.capacity < 100000000) {
                   <span class="capacity-banner-live">
                     Live load: <strong>{{ capInfo.liveRps | number: '1.0-0' }} rps</strong> ·
@@ -1117,8 +1155,10 @@
               <i
                 class="fas fa-info-circle info-icon"
                 [title]="
-                  'The load the simulation lets this service absorb before it saturates. Derived from sizing parameters (instances, vCPU, RCU/WCU, shards…) or the default AWS quota, NOT from Requests/Second, which only drives the cost estimate. ' +
-                  capInfo.saturationHint
+                  node.type === 'generic'
+                    ? capInfo.saturationHint
+                    : 'The load the simulation lets this service absorb before it saturates. Derived from sizing parameters (instances, vCPU, RCU/WCU, shards…) or the default AWS quota, NOT from Requests/Second, which only drives the cost estimate. ' +
+                      capInfo.saturationHint
                 "
               ></i>
             </div>
@@ -1673,6 +1713,9 @@
                         </div>
                         <div class="dch-value">{{ totalCostFormatted }}</div>
                       </div>
+                      @if (hasGenericServices) {
+                        <p class="dashboard-empty-subtext">Generic services have no cost estimate.</p>
+                      }
                       @if (unifiedServices.length) {
                         <div class="svc-dashboard-list">
                           <!-- track by type (stable key): unifiedServices is a getter that builds
@@ -1730,7 +1773,7 @@
                             </div>
                           }
                         </div>
-                      } @else {
+                      } @else if (!hasGenericServices) {
                         <p class="dashboard-empty-text">
                           Drag AWS services from the palette to see active infrastructure, cost
                           details, and docs.

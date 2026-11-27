@@ -7,7 +7,7 @@ const KNOWN_CATEGORIES = new Set([
   'Compute', 'Containers', 'Networking & Content Delivery', 'Storage', 'Database',
   'Analytics', 'Machine Learning', 'Application Integration', 'Developer Tools',
   'Management & Governance', 'Security, Identity, & Compliance', 'Media Services',
-  'Internet of Things', 'Users',
+  'Internet of Things', 'Users', 'Generic',
 ]);
 
 describe('AwsCatalogService', () => {
