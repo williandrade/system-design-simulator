@@ -25,6 +25,7 @@ export function isPairingCode(code) {
 }
 
 export function isResult(message) {
+  if (!isObject(message)) return false;
   if (message.ok === true) return isObject(message.data);
   return message.ok === false
     && isObject(message.error)

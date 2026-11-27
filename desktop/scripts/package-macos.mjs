@@ -10,8 +10,10 @@ import { fileURLToPath } from 'node:url';
 const desktopDir = fileURLToPath(new URL('../', import.meta.url));
 const projectDir = fileURLToPath(new URL('../../', import.meta.url));
 const frontendDir = join(projectDir, 'frontend');
-const { name, version, productName } = JSON.parse(await readFile(join(desktopDir, 'package.json'), 'utf8'));
-const electronVersion = '45.5.0';
+const { name, version, productName, devDependencies } = JSON.parse(
+  await readFile(join(desktopDir, 'package.json'), 'utf8'),
+);
+const electronVersion = devDependencies.electron;
 const nodeVersion = '24.22.3';
 const nodeArchiveHash = '1d64136c8a43d648d1b3bad10797a4c995b1ca032d2bde8799de43b37f058fe5';
 
@@ -67,7 +69,9 @@ async function buildApp(stagingDir) {
     join(frontendDir, 'src/app/core/data/regions/us-east-1.json'),
     join(resourcesDir, 'data/us-east-1.json'),
   );
-  await stageRuntimePackage('backend', ['server.js', 'regions.js'], resourcesDir);
+  const { services } = JSON.parse(await readFile(join(frontendDir, 'src/app/core/config/aws-services.json'), 'utf8'));
+  await writeFile(join(resourcesDir, 'data/docs-service-ids.json'), JSON.stringify(services.map(({ type }) => type)));
+  await stageRuntimePackage('backend', ['pricing.js', 'regions.js'], resourcesDir);
   await stageRuntimePackage('mcp', ['src'], resourcesDir);
   await stageNode(stagingDir, resourcesDir);
 
@@ -82,7 +86,10 @@ async function buildApp(stagingDir) {
   const appDir = join(stagingDir, 'app');
   await mkdir(appDir);
   await writeFile(join(appDir, 'package.json'), JSON.stringify({ name, version, productName, main: 'main.cjs' }));
-  for (const file of ['main.cjs', 'preload.cjs', 'mcp-setup.cjs']) {
+  for (const file of [
+    'main.cjs', 'preload.cjs', 'mcp-setup.cjs', 'desktop-mcp.cjs',
+    'protocol.cjs', 'migration.cjs', 'dev-runtime.cjs',
+  ]) {
     await cp(join(desktopDir, file), join(appDir, file));
   }
   await cp(join(projectDir, 'LICENSE'), join(appDir, 'LICENSE'));

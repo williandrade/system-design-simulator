@@ -8,12 +8,13 @@ const { registerMcpSetup } = require('./mcp-setup.cjs');
 
 const origin = 'http://127.0.0.1:4200';
 
-function fixture(t) {
+function fixture(t, options = {}) {
   const directory = mkdtempSync(path.join(tmpdir(), 'mcp-setup-test-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const launcherPath = path.join(directory, "Cópia ' $(echo expanded) `echo expanded` $USER");
   writeFileSync(launcherPath, '', { mode: 0o700 });
-  const senderFrame = { origin, url: `${origin}/` };
+  const resolvedOrigin = options.origin ?? origin;
+  const senderFrame = { origin: resolvedOrigin, url: `${resolvedOrigin}/` };
   const sender = { mainFrame: senderFrame };
   const handlers = new Map();
   const writes = [];
@@ -23,6 +24,7 @@ function fixture(t) {
     getWindow: () => ({ webContents: sender }),
     origin,
     launcherPath,
+    ...options,
   });
   return {
     event: { sender, senderFrame },
@@ -37,6 +39,8 @@ test('quotes the bundled launcher as one literal argument for both clients', (t)
   const { event, get, copy, launcherPath, writes } = fixture(t);
   const setup = get(event);
   assert.equal(setup.launcherPath, launcherPath);
+  assert.equal(setup.serverId, 'willis-overengineer-inator');
+  assert.deepEqual(setup.launcherArgs, []);
   for (const client of ['codex', 'claude']) {
     assert.equal(copy(event, client), true);
     assert.equal(writes.at(-1), setup.commands[client]);
@@ -77,4 +81,39 @@ test('rejects other clients, windows, frames, origins, routes and missing launch
   assert.equal(get(event), null);
   assert.equal(copy(event, 'claude'), false);
   assert.deepEqual(writes, []);
+});
+
+test('uses the development alias and preserves each launcher argument', (t) => {
+  const launcherArgs = ["/Example's checkout/mcp/src/index.mjs", '--mode', 'desktop-dev'];
+  let isCurrent = true;
+  const { event, get, copy, launcherPath } = fixture(t, {
+    mode: 'desktop-dev', namespace: 'qa-dev', launcherArgs, isCurrent: () => isCurrent,
+  });
+  const setup = get(event);
+  assert.equal(setup.mode, 'desktop-dev');
+  assert.equal(setup.serverId, 'willis-overengineer-inator-dev');
+  assert.deepEqual(setup.launcherArgs, [...launcherArgs, '--namespace', 'qa-dev']);
+  const prefix = 'codex mcp add willis-overengineer-inator-dev -- ';
+  assert.ok(setup.commands.codex.startsWith(prefix));
+  const args = execFileSync('/bin/sh', ['-c', `printf '%s\\n' ${setup.commands.codex.slice(prefix.length)}`], {
+    encoding: 'utf8',
+  }).trimEnd().split('\n');
+  assert.deepEqual(args, [launcherPath, ...setup.launcherArgs]);
+  isCurrent = false;
+  assert.equal(get(event), null);
+  assert.equal(copy(event, 'codex'), false);
+});
+
+test('requires the packaged frame URL to match the Chromium custom origin', (t) => {
+  const { event, get } = fixture(t, { origin: 'app://overengineer-inator' });
+  assert.equal(get(event).mode, 'desktop');
+  for (const url of [
+    'http://overengineer-inator/playground',
+    'app://other/playground',
+    'app://overengineer-inator:3000/playground',
+    'app://user@overengineer-inator/playground',
+  ]) {
+    event.senderFrame.url = url;
+    assert.equal(get(event), null, url);
+  }
 });

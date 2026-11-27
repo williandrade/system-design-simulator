@@ -14,12 +14,31 @@ const RENDER_TIMEOUT_MS = 2000;
 const ACTION_DWELL_MS = 500;
 
 interface CanvasSession {
-  socket: WebSocket;
+  transport: CanvasTransport;
   canvasId: string;
   pairingTimer: ReturnType<typeof setTimeout>;
   hasState: boolean;
   inFlight: boolean;
   cancelPresentation?: () => void;
+}
+
+interface CanvasTransport {
+  isOpen(): boolean;
+  send(payload: string): void;
+  close(): void;
+}
+
+interface DesktopCanvasMcp {
+  pair(token: string, canvasId: string, code: string): Promise<boolean>;
+  result(token: string, payload: string): Promise<boolean>;
+  disconnect(token: string): Promise<boolean>;
+  subscribe(token: string, callback: (value: string | null) => void): () => void;
+}
+
+declare global {
+  interface Window {
+    simulatorCanvasMcp?: DesktopCanvasMcp;
+  }
 }
 
 interface CanvasHost {
@@ -36,10 +55,18 @@ export class CanvasMcpConnection {
 
   private session?: CanvasSession;
 
-  constructor(private readonly host: CanvasHost) {}
+  constructor(
+    private readonly host: CanvasHost,
+    private readonly run: (callback: () => void) => void = (callback) => callback(),
+  ) {}
 
-  static isSupportedOrigin(origin: string): boolean {
-    return origin === 'http://localhost:4200' || origin === 'http://127.0.0.1:4200';
+  static canConnect(window: Window): boolean {
+    if (window.simulatorCanvasMcp) return true;
+    // Chromium dev and Electron dev use the same Angular build. The desktop
+    // window must not use the web relay when the native bridge is missing.
+    if (window.navigator?.userAgent.includes('Electron/')) return false;
+    return window.location.origin === 'http://localhost:4200' ||
+      window.location.origin === 'http://127.0.0.1:4200';
   }
 
   connect(code: string): void {
@@ -47,7 +74,7 @@ export class CanvasMcpConnection {
     if (
       this.session ||
       !canvasId ||
-      !CanvasMcpConnection.isSupportedOrigin(window.location.origin)
+      !CanvasMcpConnection.canConnect(window)
     ) {
       return;
     }
@@ -57,9 +84,17 @@ export class CanvasMcpConnection {
       return;
     }
 
-    const socket = new WebSocket(CANVAS_SOCKET_URL);
+    const bridge = window.simulatorCanvasMcp;
+    if (bridge) {
+      this.connectDesktop(bridge, canvasId, pairingCode);
+    } else {
+      this.connectWeb(canvasId, pairingCode);
+    }
+  }
+
+  private startSession(canvasId: string, transport: CanvasTransport): CanvasSession {
     const session: CanvasSession = {
-      socket,
+      transport,
       canvasId,
       pairingTimer: setTimeout(
         () => this.close(session, 'Pairing timed out. Request a fresh code.'),
@@ -71,7 +106,19 @@ export class CanvasMcpConnection {
     this.session = session;
     this.status = 'connecting';
     this.message = 'Connecting to the local MCP server…';
+    return session;
+  }
 
+  private connectWeb(canvasId: string, pairingCode: string): void {
+    const socket = new WebSocket(CANVAS_SOCKET_URL);
+    const session = this.startSession(canvasId, {
+      isOpen: () => socket.readyState === WebSocket.OPEN,
+      send: (payload) => socket.send(payload),
+      close() {
+        socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
+        if (socket.readyState < WebSocket.CLOSING) socket.close();
+      },
+    });
     socket.onopen = () => {
       if (!this.isCurrent(session)) return;
       socket.send(JSON.stringify({ version: 1, type: 'pair', code: pairingCode, canvasId }));
@@ -90,6 +137,40 @@ export class CanvasMcpConnection {
     };
   }
 
+  private connectDesktop(bridge: DesktopCanvasMcp, canvasId: string, pairingCode: string): void {
+    const token = crypto.randomUUID();
+    let open = true;
+    const session = this.startSession(canvasId, {
+      isOpen: () => open,
+      send: (payload) => {
+        void bridge.result(token, payload).then(
+          (accepted) => { if (!accepted) failed(); },
+          failed,
+        );
+      },
+      close: () => {
+        open = false;
+        unsubscribe();
+        void bridge.disconnect(token).catch(() => {});
+      },
+    });
+    const failed = () => this.run(() => this.close(session, 'The local MCP connection failed.'));
+    const unsubscribe = bridge.subscribe(token, (value) => {
+      this.run(() => {
+        if (value === null) {
+          this.close(session, 'The local MCP connection ended.');
+        } else {
+          void this.receive(session, value);
+        }
+      });
+    });
+    void bridge.pair(token, canvasId, pairingCode).then((accepted) => {
+      if (!accepted) {
+        this.close(session, 'Pairing was refused. Request a fresh code.');
+      }
+    }, failed);
+  }
+
   disconnect(): void {
     if (this.session) this.close(this.session, 'Disconnected from the local MCP client.');
   }
@@ -97,7 +178,7 @@ export class CanvasMcpConnection {
   private isCurrent(session: CanvasSession): boolean {
     return (
       this.session === session &&
-      session.socket.readyState === WebSocket.OPEN &&
+      session.transport.isOpen() &&
       this.host.activeCanvasId() === session.canvasId
     );
   }
@@ -107,9 +188,7 @@ export class CanvasMcpConnection {
     this.session = undefined;
     clearTimeout(session.pairingTimer);
     session.cancelPresentation?.();
-    const { socket } = session;
-    socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
-    if (socket.readyState < WebSocket.CLOSING) socket.close();
+    session.transport.close();
     this.status = 'disconnected';
     this.message = message;
     this.lastAction = undefined;
@@ -221,7 +300,7 @@ export class CanvasMcpConnection {
     const outcome = result.ok
       ? { ok: true, data: result.data }
       : { ok: false, error: result.error };
-    session.socket.send(
+    session.transport.send(
       JSON.stringify({
         version: 1,
         type: 'result',

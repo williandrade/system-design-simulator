@@ -105,9 +105,12 @@ export class CostService {
     } catch { }
 
     const base = (environment as { dailyApiBase?: string }).dailyApiBase;
-    if (!base) return;
+    const origin = window.location;
+    const packaged = origin.protocol === 'app:' && origin.host === 'overengineer-inator';
+    const url = packaged ? '/api/fx' : base && `${base}/fx`;
+    if (!url) return;
     try {
-      const res = await fetch(`${base}/fx`);
+      const res = await fetch(url);
       if (!res.ok) return;
       const fx = await res.json();
       if (fx?.rates) {
