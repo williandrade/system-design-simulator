@@ -1,0 +1,99 @@
+:host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #155e75;
+  --network-label-background: #ecfeff;
+}
+
+:host-context(.dark) {
+  color: #a5f3fc;
+  --network-label-background: #0c2833;
+}
+
+.network-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: 12px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.network-frame[data-frame-kind='az'] {
+  border-style: dashed;
+}
+
+.network-frame[data-frame-kind='subnet'] {
+  border-style: dotted;
+  border-radius: 8px;
+}
+
+.frame-title {
+  position: absolute;
+  top: 7px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: max(110px, calc(100% - 16px));
+  border: 0;
+  border-radius: 4px;
+  padding: 3px 5px;
+  color: inherit;
+  background: var(--network-label-background);
+  font:
+    650 12px/1.2 system-ui,
+    sans-serif;
+  text-align: left;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.frame-kind {
+  flex-shrink: 0;
+  opacity: 0.85;
+  font-size: 10px;
+}
+
+.frame-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.network-frame--focused {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
+
+.network-links {
+  position: absolute;
+  inset: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+}
+
+.network-link {
+  stroke: currentColor;
+  stroke-width: 2px;
+  stroke-dasharray: 6 4;
+}
+
+.network-link--focused .network-link {
+  stroke-width: 4px;
+}
+
+.network-arrowhead {
+  fill: currentColor;
+}
+
+.network-link-label {
+  fill: currentColor;
+  stroke: var(--network-label-background);
+  stroke-width: 4px;
+  paint-order: stroke;
+  font:
+    650 13px system-ui,
+    sans-serif;
+}

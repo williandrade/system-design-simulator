@@ -1,6 +1,6 @@
 import type { ArchitectureNode, GenericServiceMetadata } from '../models/architecture.model';
 
-function isGenericServiceMetadata(value: unknown): value is GenericServiceMetadata {
+export function isGenericServiceMetadata(value: unknown): value is GenericServiceMetadata {
   return (
     typeof value === 'object' &&
     value !== null &&

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CostService } from './cost.service';
 import { AwsCatalogService } from './aws-catalog.service';
 import { ArchitectureFactoryService } from './architecture-factory.service';
@@ -20,6 +20,35 @@ describe('CostService', () => {
 
   const node = (type: AwsServiceType): ArchitectureNode => factory.createNode(type, 0, 0);
   const billableTypes: AwsServiceType[] = ['ec2', 's3', 'lambda', 'rds', 'dynamoDb', 'apiGateway', 'amplify'];
+
+  it('reports unavailable regional data and the embedded us-east-1 fallback', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
+    try {
+      await expect(cost.loadRegionPricing('ap-southeast-2')).resolves.toEqual({ status: 'unavailable' });
+      expect(cost.unsupportedRegion$.value).toBe('ap-southeast-2');
+      await expect(cost.loadRegionPricing('us-east-1')).resolves.toEqual({ status: 'ready', effectiveRegion: 'us-east-1', source: 'embedded' });
+      expect(cost.unsupportedRegion$.value).toBeNull();
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
+  it('does not publish a stale pricing failure after selecting another region', async () => {
+    let rejectOldRequest!: (reason: Error) => void;
+    const oldResponse = new Promise<Response>((_, reject) => { rejectOldRequest = reject; });
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockReturnValueOnce(oldResponse)
+      .mockResolvedValueOnce(Response.json({ regionCode: 'ap-southeast-2', services: {} }));
+    try {
+      const old = cost.loadRegionPricing('eu-west-1');
+      await expect(cost.loadRegionPricing('ap-southeast-2')).resolves.toEqual({ status: 'ready', effectiveRegion: 'ap-southeast-2', source: 'api' });
+      rejectOldRequest(new Error('Late failure'));
+      await old;
+      expect(cost.unsupportedRegion$.value).toBeNull();
+    } finally {
+      fetch.mockRestore();
+    }
+  });
 
   it('returns a currency symbol for every supported currency', () => {
     const currencies: Currency[] = ['USD', 'EUR', 'GBP', 'INR', 'JPY'];

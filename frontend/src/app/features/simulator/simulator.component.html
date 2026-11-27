@@ -340,7 +340,7 @@
             <button type="button" class="category-header" (click)="toggleCategory('Built-in')">
               <span class="category-indicator" style="background: #6366f1"></span>
               <span class="category-name">Built-in</span>
-              <small>2</small>
+              <small>3</small>
               <b>{{ isCategoryCollapsed('Built-in') ? '+' : '−' }}</b>
             </button>
             @if (!isCategoryCollapsed('Built-in')) {
@@ -362,6 +362,15 @@
                   <span>
                     <strong>Note</strong>
                   </span>
+                </button>
+
+                <button type="button" class="service-tile" (click)="openNetworkEditor()"
+                  aria-label="Network diagram" title="Network diagram"
+                  [attr.aria-expanded]="showNetworkEditor" style="--service-color: #0891b2">
+                  <span class="service-tile-icon service-tile-icon--flat" style="display: grid; place-items: center">
+                    <i class="fas fa-project-diagram" aria-hidden="true" style="color: #0891b2"></i>
+                  </span>
+                  <span><strong>Network</strong></span>
                 </button>
 
                 <!-- Users / Client Tile -->
@@ -538,6 +547,15 @@
         </div>
       </div>
 
+      @if (showNetworkEditor) {
+        <app-network-editor [network]="network" [nodes]="nodes" [origin]="networkEditorOrigin"
+          [frameToEdit]="networkFrameToEdit" [disabled]="mode !== 'idle'" [feedback]="networkEditorFeedback"
+          (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"
+          (dblclick)="$event.stopPropagation()" (touchstart)="$event.stopPropagation()"
+          (operation)="editNetworkDiagram($event)" (closed)="closeNetworkEditor(true)" />
+      } @else if (network.arrows.length) {
+        <div class="network-legend"><span aria-hidden="true"></span> Diagram links carry no traffic</div>
+      }
       <div class="canvas-surface" (contextmenu)="$event.preventDefault()"></div>
       <f-flow
         class="flow-host"
@@ -555,9 +573,12 @@
           [fZoomStep]="0.12"
           (fCanvasChange)="onFoblexCanvasChange($event)"
         >
+          <app-network-diagram ngProjectAs="[fGroups]" [network]="network" [nodes]="nodes"
+            [focusedId]="mcp.lastAction?.targetId" (frameSelected)="openNetworkEditor($event)" />
           @for (connection of connections; track trackById($index, connection)) {
             <f-connection
               [fConnectionId]="connection.id"
+              [attr.data-connection-id]="connection.id"
               [fOutputId]="connectorId(connection.sourceNodeId, connection.sourcePortId)"
               [fInputId]="connectorId(connection.targetNodeId, connection.targetPortId)"
               fType="bezier"
@@ -582,6 +603,7 @@
               fNode
               fDragHandle
               [fNodeId]="node.id"
+              [attr.data-node-id]="node.id"
               [fNodePosition]="nodePos(node)"
               class="node-card"
               [class.vpc-card]="node.type === 'vpc'"
@@ -751,6 +773,7 @@
               [fNodeId]="anno.id"
               [fNodePosition]="nodePos(anno)"
               class="annotation-node"
+              [attr.data-annotation-id]="anno.id"
               [class.selected]="anno.selected"
               [class.mcp-highlight]="mcp.lastAction?.targetId === anno.id"
               [attr.data-mcp-highlighted-target]="
@@ -823,15 +846,17 @@
             </div>
           }
         </f-canvas>
-        <div
-          class="mini-map"
-          [class.minimap-mobile]="isMobileViewport"
-          [class.minimap-visible]="minimapVisible"
-          aria-label="Canvas minimap"
-          (pointerdown)="onMinimapInteract($event)"
-        >
-          <f-minimap [fMinSize]="minimapMinSize"></f-minimap>
-        </div>
+        @if (nodes.length || annotations.length) {
+          <div
+            class="mini-map"
+            [class.minimap-mobile]="isMobileViewport"
+            [class.minimap-visible]="minimapVisible"
+            aria-label="Canvas minimap"
+            (pointerdown)="onMinimapInteract($event)"
+          >
+            <f-minimap [fMinSize]="minimapMinSize"></f-minimap>
+          </div>
+        }
       </f-flow>
     </section>
 
@@ -1260,6 +1285,7 @@
               @for (field of selectedPrimaryParams; track field) {
                 <!-- eslint-disable-next-line @angular-eslint/template/label-has-associated-control -->
                 <label
+                  [attr.data-mcp-config-field]="field.key"
                   (mousemove)="onMouseMove($event)"
                   [class.readonly-row]="isFieldLocked(node, field)"
                 >
@@ -1409,6 +1435,7 @@
                 @for (field of selectedCostParams; track field) {
                   <!-- eslint-disable-next-line @angular-eslint/template/label-has-associated-control -->
                   <label
+                  [attr.data-mcp-config-field]="field.key"
                     (mousemove)="onMouseMove($event)"
                     [class.readonly-row]="isFieldLocked(node, field)"
                   >
@@ -1920,6 +1947,9 @@
           <span class="status-text">{{
             mode === 'running' ? 'Simulating' : mode === 'paused' ? 'Paused' : 'Play'
           }}</span>
+          @if (mode !== 'idle' && simulationWarning) {
+            <span role="status" [attr.aria-label]="simulationWarning" [title]="simulationWarning">⚠</span>
+          }
         </div>
         <!-- Equalizer Waveform -->
         @if (mode === 'running') {
@@ -2102,12 +2132,7 @@
         <h3 id="unsupported-region-title">Region Not Available Yet</h3>
         <p class="unsupported-region-code">{{ unsupportedRegionCode }}</p>
         <p class="unsupported-desc">
-          Pricing data for this region hasn't been generated yet. The pricing engine runs weekly and
-          will add this region soon.
-        </p>
-        <p class="unsupported-reverted">
-          <i class="fas fa-undo-alt"></i>
-          Reverted to <strong>{{ previousRegion }}</strong>
+          Current prices could not be loaded for this region. You can continue editing and simulating the canvas.
         </p>
         <!-- Actions -->
         <div class="unsupported-actions">

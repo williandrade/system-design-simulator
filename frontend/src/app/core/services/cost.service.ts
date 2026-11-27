@@ -22,6 +22,10 @@ export interface CostBreakdown {
   freeTierNote?: string;
 }
 
+export type RegionPricing =
+  | { status: 'loading' | 'unavailable' }
+  | { status: 'ready'; effectiveRegion: string; source: 'api' | 'embedded' };
+
 @Injectable({ providedIn: 'root' })
 export class CostService {
   public readonly regions = [
@@ -63,7 +67,7 @@ export class CostService {
   }
 
   private loadedPricing: any = fallbackPrices;
-  private currentRegionCode: string = 'us-east-1';
+  private pricingRequest = 0;
 
   public readonly unsupportedRegion$ = new BehaviorSubject<string | null>(null);
 
@@ -132,29 +136,25 @@ export class CostService {
   private readonly costModel = (serviceCostModelData as any).serviceCostModel || (serviceCostModelData as any).default?.serviceCostModel || {};
   private activeNodes: ArchitectureNode[] = [];
 
-  async loadRegionPricing(regionCode: string): Promise<void> {
-    this.currentRegionCode = regionCode;
+  async loadRegionPricing(regionCode: string): Promise<RegionPricing> {
+    const request = ++this.pricingRequest;
     this.unsupportedRegion$.next(null);
-
     try {
-      const response = await fetch(`${environment.apiBaseUrl}/api/prices?region=${regionCode}`);
-
-      if (response.status === 404) {
-        const body = await response.json();
-        if (body.unsupportedRegion) {
-          this.unsupportedRegion$.next(regionCode);
-          return;
-        }
-      }
-
+      const response = await fetch(`${environment.apiBaseUrl}/api/prices?region=${encodeURIComponent(regionCode)}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      this.loadedPricing = await response.json();
-
-    } catch (e) {
-      if (!environment.production) {
-        console.warn(`[CostService] Failed to fetch pricing for ${regionCode}. Keeping previous pricing.`, e);
+      const prices = await response.json();
+      if (prices?.regionCode !== regionCode || !prices.services || typeof prices.services !== 'object') {
+        throw new Error('Pricing response does not match the selected region.');
       }
+      if (request === this.pricingRequest) this.loadedPricing = prices;
+      return { status: 'ready', effectiveRegion: regionCode, source: 'api' };
+    } catch {
+      if (regionCode === fallbackPrices.regionCode) {
+        if (request === this.pricingRequest) this.loadedPricing = fallbackPrices;
+        return { status: 'ready', effectiveRegion: regionCode, source: 'embedded' };
+      }
+      if (request === this.pricingRequest) this.unsupportedRegion$.next(regionCode);
+      return { status: 'unavailable' };
     }
   }
 

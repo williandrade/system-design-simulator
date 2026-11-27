@@ -4871,6 +4871,33 @@ small {
   transform: scale(0.98);
 }
 
+.network-legend {
+  position: absolute;
+  top: 54px;
+  left: 14px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: #ecfeff;
+  color: #155e75;
+  font-size: 11px;
+  font-weight: 650;
+  pointer-events: none;
+}
+
+.network-legend span {
+  width: 16px;
+  border-top: 2px dashed currentColor;
+}
+
+:host-context(.dark) .network-legend {
+  background: #0c2833;
+  color: #a5f3fc;
+}
+
 /* Minimap — Foblex f-minimap inside sketchbook canvas */
 .mini-map {
   position: absolute;

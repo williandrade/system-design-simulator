@@ -29,7 +29,9 @@ export async function replay(reference, call, start) {
   const [users] = reference.nodes;
   const nodeId = nodeIds.get(users.id);
   const { fields } = await call('get_node_config_fields', { nodeId });
-  assert.deepEqual(fields, [{ key: 'requestRate', type: 'number', value: 50, min: 2, max: 1000 }]);
+  assert.deepEqual(fields.find(({ key }) => key === 'requestRate'), {
+    key: 'requestRate', type: 'number', value: 50, min: 2, max: 1000,
+  });
   for (const value of [100, 50]) {
     const applied = await call('set_node_config', { nodeId, key: 'requestRate', value });
     assert.deepEqual(applied, { nodeId, key: 'requestRate', value });
