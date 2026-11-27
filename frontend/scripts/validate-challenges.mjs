@@ -24,7 +24,7 @@ const AWS_SERVICES = join(here, '../src/app/core/config/aws-services.json');
 /** Service types draggable in Developer Mode. Keep in sync with the
  *  `devServices` set in features/simulator/simulator.component.ts. */
 const DEV_PALETTE = new Set([
-  'client', 'route53', 'cloudfront', 'apiGateway', 'elb', 'lambda', 'ec2', 'ecs',
+  'client', 'generic', 'route53', 'cloudfront', 'apiGateway', 'elb', 'lambda', 'ec2', 'ecs',
   'eks', 'appRunner', 's3', 'efs', 'rds', 'aurora', 'dynamoDb', 'elastiCache',
   'sqs', 'sns', 'eventBridge', 'stepFunctions', 'cloudWatch', 'xray', 'cognito',
   'appSync', 'bedrock', 'kinesis', 'kinesisFirehose',
@@ -58,6 +58,7 @@ function edgeValid(src, tgt) {
   if (!T) return `unknown target type "${tgt}"`;
   const outs = new Set((S.outputs || []).map((p) => p.type || p));
   const ins = new Set((T.inputs || []).map((p) => p.type || p));
+  if ((src === 'generic' || tgt === 'generic') && outs.size && ins.size) return null;
   for (const r of S.rules || []) {
     if (r.target !== tgt && r.target !== '*') continue;
     if ((r.sourcePorts || []).some((p) => outs.has(p)) && (r.targetPorts || []).some((p) => ins.has(p))) return null;
@@ -212,6 +213,7 @@ for (const ch of data.challenges) {
   }
   for (const [s, t] of refEdges) {
     if (!keyType.has(s) || !keyType.has(t)) { fail(id, `edge ${s} -> ${t} references an unknown node key`); continue; }
+    if (s === t) { fail(id, `edge ${s} -> ${t} connects a node to itself`); continue; }
     const err = edgeValid(keyType.get(s), keyType.get(t));
     if (err) fail(id, `edge ${s} -> ${t}: ${err}`);
   }

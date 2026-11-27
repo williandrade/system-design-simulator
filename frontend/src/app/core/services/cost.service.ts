@@ -2372,6 +2372,8 @@ export class CostService {
   }
 
   getCostBreakdown(node: ArchitectureNode, region: string = 'us-east-1', allNodes?: ArchitectureNode[]): CostBreakdown {
+    if (node.type === 'generic') return { lines: [], total: 0 };
+
     const model = this.costModel[node.type];
     const config: any = node.config;
     const lines: CostBreakdownLine[] = [];

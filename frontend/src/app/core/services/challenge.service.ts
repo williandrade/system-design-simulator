@@ -23,6 +23,10 @@ export class ChallengeService {
   private readonly activeChallengeSubject = new BehaviorSubject<Challenge | null>(null);
   readonly activeChallenge$ = this.activeChallengeSubject.asObservable();
 
+  get activePaletteSubset(): Challenge['paletteSubset'] {
+    return this.activeChallengeSubject.value?.paletteSubset;
+  }
+
   private readonly progressSubject = new BehaviorSubject<ChallengeProgress | null>(null);
   readonly progress$ = this.progressSubject.asObservable();
 

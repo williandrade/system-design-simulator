@@ -34,6 +34,39 @@ describe('ArchitectureFactoryService', () => {
       expect(b.config['cpu']).not.toBe(999);
     });
 
+    it('creates a generic node with independent metadata and stable port IDs', () => {
+      const first = factory.createNode('generic', 0, 0);
+      const second = factory.createNode('generic', 0, 0);
+
+      expect(first.name).toBe('Generic Service');
+      expect(first.ports.map(({ id, type }) => [id, type])).toEqual([
+        ['in-http', 'http'],
+        ['out-http', 'http'],
+      ]);
+      expect(first.genericMetadata).toEqual({ label: '', properties: [] });
+      first.genericMetadata!.properties.push({ key: 'latency', value: '9999' });
+      expect(second.genericMetadata).toEqual({ label: '', properties: [] });
+      expect(first.config.latency).toBe(40);
+      expect(factory.createNode('ec2', 0, 0)).not.toHaveProperty('genericMetadata');
+    });
+
+    it('restores fixed generic settings while preserving the node identity and properties', () => {
+      const node = factory.createNode('generic', 0, 0);
+      node.config.latency = 999;
+      node.config.throughput = 999;
+      node.genericMetadata = { label: 'Worker', properties: [{ key: 'latency', value: '999' }] };
+      const restored = factory.withFixedGenericConfig(node);
+
+      expect(restored.id).toBe(node.id);
+      expect(restored.ports).toEqual(node.ports);
+      expect(restored.genericMetadata).toEqual(node.genericMetadata);
+      expect(restored.config.latency).toBe(40);
+      expect(restored.config.throughput).toBe(100);
+      expect(node.config.latency).toBe(999);
+      const aws = factory.createNode('lambda', 0, 0);
+      expect(factory.withFixedGenericConfig(aws)).toBe(aws);
+    });
+
     it('gives each node an independent metrics copy', () => {
       const a = factory.createNode('ec2', 0, 0);
       a.metrics.processed = 500;

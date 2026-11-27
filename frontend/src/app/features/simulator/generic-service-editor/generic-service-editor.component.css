@@ -1,0 +1,128 @@
+:host {
+  --editor-text: var(--c-slate-800);
+  --editor-label: var(--c-slate-600);
+  --editor-background: rgba(255, 255, 255, 0.4);
+  --editor-border: rgba(148, 163, 184, 0.4);
+  --editor-focus: var(--c-violet);
+  display: block;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+:host-context(.dark) {
+  --editor-text: var(--c-slate-200);
+  --editor-label: var(--c-slate-300);
+  --editor-background: rgba(15, 23, 42, 0.2);
+  --editor-border: rgba(148, 163, 184, 0.4);
+  --editor-focus: var(--c-violet-300);
+}
+
+.label-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--editor-background);
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+}
+
+.label-field span,
+.properties legend,
+.property-row label span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--editor-label);
+}
+
+input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 12px;
+  color: var(--editor-text);
+}
+
+.label-field input {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-weight: 600;
+  outline: none;
+}
+
+.properties {
+  min-inline-size: 0;
+  display: grid;
+  gap: 8px;
+  padding: 8px 0 0;
+  margin: 12px 0 0;
+  border: 0;
+}
+
+.property-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 28px;
+  align-items: end;
+  gap: 6px;
+}
+
+.property-row label {
+  display: grid;
+  gap: 3px;
+}
+
+.property-row input {
+  min-height: 28px;
+  padding: 4px 6px;
+  background: var(--editor-background);
+  border: 1px solid var(--editor-border);
+  border-radius: 6px;
+}
+
+button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--editor-background);
+  border: 1px solid var(--editor-border);
+  border-radius: 6px;
+  color: var(--editor-label);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--editor-focus);
+  color: var(--editor-text);
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.label-field:focus-within,
+.property-row input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--editor-focus);
+  outline-offset: 1px;
+}
+
+@container (max-width: 200px) {
+  .property-row {
+    grid-template-columns: minmax(0, 1fr) 28px;
+  }
+
+  .property-row label {
+    grid-column: 1;
+  }
+
+  .remove-property {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}

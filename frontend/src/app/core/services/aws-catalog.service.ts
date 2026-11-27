@@ -134,6 +134,7 @@ export class AwsCatalogService {
       'Media Services': '#bc6422',
       'Internet of Things': '#27847c',
       'Users': '#219cba',
+      'Generic': '#64748b',
     };
     return colors[category] || '#94a3b8';
   }

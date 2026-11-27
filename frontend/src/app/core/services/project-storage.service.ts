@@ -7,6 +7,7 @@ import {
   Annotation,
   Currency,
 } from '../models/architecture.model';
+import { recoverGenericServiceMetadata } from '../utils/generic-service-metadata';
 
 const storageKey = 'aws-system-design-simulator-project';
 const workspaceKey = 'aws-system-design-simulator-workspace';
@@ -40,7 +41,8 @@ export class ProjectStorageService {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return null;
     try {
-      return JSON.parse(raw) as ArchitectureProject;
+      const project = JSON.parse(raw) as ArchitectureProject;
+      return { ...project, nodes: recoverGenericServiceMetadata(project.nodes) };
     } catch {
       return null;
     }
@@ -54,7 +56,14 @@ export class ProjectStorageService {
     const raw = localStorage.getItem(workspaceKey);
     if (!raw) return null;
     try {
-      return JSON.parse(raw) as PersistedWorkspace;
+      const workspace = JSON.parse(raw) as PersistedWorkspace;
+      return {
+        ...workspace,
+        tabs: workspace.tabs.map((tab) => ({
+          ...tab,
+          nodes: recoverGenericServiceMetadata(tab.nodes ?? []),
+        })),
+      };
     } catch {
       return null;
     }

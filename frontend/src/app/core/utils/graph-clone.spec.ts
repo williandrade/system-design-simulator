@@ -69,6 +69,37 @@ describe('cloneGraph', () => {
     nodes[0].config['cpu'] = 999;
     expect(source.config['cpu']).toBe(50);
   });
+
+  it('copies generic properties in order without sharing the source rows', () => {
+    const metadata = {
+      label: 'Partner API',
+      properties: [
+        { key: 'owner', value: 'Payments' },
+        { key: 'owner', value: '' },
+      ],
+    };
+    const source = { ...makeNode('generic', 'generic'), genericMetadata: metadata };
+    const { nodes } = cloneGraph([source], [], 0, 0, { emptyMetrics });
+    const copied = nodes[0].genericMetadata!;
+
+    expect(copied).toEqual(metadata);
+    expect(copied).not.toBe(metadata);
+    expect(copied.properties).not.toBe(metadata.properties);
+    copied.properties[0].value = 'Other team';
+    expect(metadata.properties[0].value).toBe('Payments');
+  });
+
+  it('preserves extra project fields on AWS nodes without treating them as generic metadata', () => {
+    const awsNode = {
+      ...makeNode('a', 'ec2'),
+      genericMetadata: { properties: null },
+    };
+    const imported = JSON.parse(JSON.stringify(awsNode));
+
+    const { nodes } = cloneGraph([imported], [], 0, 0, { emptyMetrics });
+
+    expect(nodes[0].genericMetadata).toEqual(awsNode.genericMetadata);
+  });
 });
 
 describe('selectSubgraph', () => {

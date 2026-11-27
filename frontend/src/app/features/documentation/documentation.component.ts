@@ -21,6 +21,7 @@ import { ARTICLES, RELEASE_NOTES, SERVICE_DOCS } from './documentation-content';
 export class DocumentationComponent implements OnInit, AfterViewChecked, OnDestroy {
   private el = inject(ElementRef);
   awsCatalog = inject(AwsCatalogService);
+  readonly documentedServices = this.awsCatalog.services.filter((service) => service.type !== 'generic');
   private sanitizer = inject(DomSanitizer);
   private themeService = inject(ThemeService);
   private titleService = inject(Title);
@@ -141,7 +142,7 @@ export class DocumentationComponent implements OnInit, AfterViewChecked, OnDestr
       const serviceParam = params.get('service');
       const categoryParam = params.get('category');
       if (serviceParam) {
-        const matched = this.awsCatalog.services.find(
+        const matched = this.documentedServices.find(
           (service) => service.type.toLowerCase() === serviceParam.toLowerCase()
         );
         if (matched) {
@@ -505,10 +506,10 @@ export class DocumentationComponent implements OnInit, AfterViewChecked, OnDestr
   get filteredServices(): AwsServiceDefinition[] {
     const query = this.searchQuery.trim().toLowerCase();
     if (!query) {
-      return this.awsCatalog.services;
+      return this.documentedServices;
     }
 
-    return this.awsCatalog.services.filter((service) => {
+    return this.documentedServices.filter((service) => {
       const doc = this.getServiceDoc(service.type);
       return (
         service.name.toLowerCase().includes(query) ||
@@ -548,11 +549,12 @@ export class DocumentationComponent implements OnInit, AfterViewChecked, OnDestr
   }
 
   openServiceDoc(type: string): void {
-    if (!this.awsCatalog.services.some((service) => service.type === type)) {
+    const service = this.documentedServices.find((candidate) => candidate.type === type);
+    if (!service) {
       return;
     }
 
-    this.selectedServiceType = type as AwsServiceType;
+    this.selectedServiceType = service.type;
     this.updateConnectivityMap(type);
     window.history.pushState(null, '', `/docs?service=${type}`);
     this.activeCategoryId = '';

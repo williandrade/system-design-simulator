@@ -313,6 +313,16 @@ describe('CostService', () => {
     });
   });
 
+  it('omits generic services from AWS cost estimates', () => {
+    const api = node('apiGateway');
+    const generic = node('generic');
+    const apiTotal = cost.calculateTotalMonthlyCost([api]);
+
+    expect(apiTotal).toBeGreaterThan(0);
+    expect(cost.getCostBreakdown(generic)).toEqual({ lines: [], total: 0 });
+    expect(cost.calculateTotalMonthlyCost([generic, api])).toBe(apiTotal);
+  });
+
   describe.each(allServiceTypes)('cost invariants for "%s"', (type) => {
     it('is finite, non-negative, deterministic, and breakdown-consistent', () => {
       const n = node(type);

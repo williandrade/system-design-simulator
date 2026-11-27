@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ValidationRuleService } from './validation-rule.service';
-import { ConnectionRule, PortType, ServicePort } from '../models/architecture.model';
+import { AwsServiceType, ConnectionRule, PortType, ServicePort } from '../models/architecture.model';
 import { makeConn, makeNode } from '../testing/fixtures';
 
 function port(id: string, direction: 'input' | 'output', type: PortType): ServicePort {
@@ -45,6 +45,48 @@ describe('ValidationRuleService', () => {
   });
 
   describe('validate', () => {
+    it('allows Users → generic → API Gateway over HTTP', () => {
+      const httpOutput = port('out', 'output', 'http');
+      const httpInput = port('in', 'input', 'http');
+      const generic = makeNode('generic', 'generic');
+
+      expect(service.validate(makeNode('users', 'client'), httpOutput, generic, httpInput, []).allowed).toBe(true);
+      expect(service.validate(generic, httpOutput, makeNode('api', 'apiGateway'), httpInput, []).allowed).toBe(true);
+    });
+
+    it.each<[AwsServiceType, PortType]>([
+      ['route53', 'dns'],
+      ['cloudWatch', 'observability'],
+      ['vpc', 'network'],
+    ])('connects generic ports to %s in either direction using %s', (type, portType) => {
+      const generic = makeNode('generic', 'generic');
+      const serviceNode = makeNode('aws', type);
+      const serviceInput = port('in', 'input', portType);
+      const serviceOutput = port('out', 'output', portType);
+      const genericInput = port('in-http', 'input', 'http');
+      const genericOutput = port('out-http', 'output', 'http');
+
+      expect(service.validate(serviceNode, serviceOutput, generic, genericInput, [])).toMatchObject({
+        allowed: true,
+        connectionType: portType,
+      });
+      expect(service.validate(generic, genericOutput, serviceNode, serviceInput, [])).toMatchObject({
+        allowed: true,
+        connectionType: portType,
+      });
+    });
+
+    it('still rejects self-links, reversed ports, and duplicate links for generic services', () => {
+      const httpOutput = port('out', 'output', 'http');
+      const httpInput = port('in', 'input', 'http');
+      const generic = makeNode('generic', 'generic');
+      const api = makeNode('api', 'apiGateway');
+
+      expect(service.validate(generic, httpOutput, generic, httpInput, []).message).toMatch(/itself/);
+      expect(service.validate(generic, httpInput, api, httpOutput, []).message).toMatch(/output port/);
+      expect(service.validate(generic, httpOutput, api, httpInput, [makeConn('generic', 'api')]).message).toMatch(/already exists/);
+    });
+
     it('rejects everything while rules are still empty (loading)', () => {
       setRules(service, []);
       const result = service.validate(makeNode('a', 'ec2'), out, makeNode('b', 'rds'), inp, []);
@@ -103,6 +145,7 @@ describe('ValidationRuleService', () => {
       expect(result.allowed).toBe(true);
       expect(result.ruleId).toBe('ec2-rds-0');
       expect(result.message).toBe(EC2_TO_RDS.description);
+      expect(result.connectionType).toBe('database');
     });
 
     it('matches wildcard source/target rules', () => {
@@ -113,16 +156,4 @@ describe('ValidationRuleService', () => {
     });
   });
 
-  describe('connectionTypeFor', () => {
-    it('returns the matched rule connection type', () => {
-      setRules(service, [EC2_TO_RDS]);
-      expect(service.connectionTypeFor('ec2-rds-0', 'http')).toBe('database');
-    });
-
-    it('falls back when the rule id is unknown or undefined', () => {
-      setRules(service, [EC2_TO_RDS]);
-      expect(service.connectionTypeFor('missing', 'http')).toBe('http');
-      expect(service.connectionTypeFor(undefined, 'network')).toBe('network');
-    });
-  });
 });

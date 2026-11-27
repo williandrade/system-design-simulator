@@ -24,7 +24,7 @@ export class GraphBuilderService {
         if (item.name) {
           node.name = item.name;
         }
-        if (item.config) {
+        if (item.config && node.type !== 'generic') {
           node.config = { ...node.config, ...item.config };
         }
         return [item.key, node] as const;
@@ -65,7 +65,7 @@ export class GraphBuilderService {
           match.sourcePort.id,
           targetNode.id,
           match.targetPort.id,
-          this.validation.connectionTypeFor(match.result.ruleId, match.sourcePort.type),
+          match.result.connectionType ?? match.sourcePort.type,
           match.result.message,
         ),
       );
