@@ -17,6 +17,9 @@
         <img src="favicon.svg" alt="" />
         <span>Willi's Overengineer-inator</span>
       </div>
+      @if (desktopMcpSetup()?.mode === 'desktop-dev') {
+        <span>Development</span>
+      }
       <div class="role-switcher">
         <button
           type="button"
@@ -220,7 +223,7 @@
             <form (submit)="pairMcpCanvas($event, pairingCode)">
               <label>
                 Prompt for your MCP client
-                <textarea readonly rows="3">Call the get_canvas_pairing MCP tool and show me the one-time code for Willi's Overengineer-inator.</textarea>
+                <textarea readonly rows="3" [value]="mcpPairingPrompt"></textarea>
               </label>
               <label>
                 Pairing code
@@ -236,7 +239,9 @@
               </label>
               <button type="submit">Pair</button>
             </form>
-            <p>Switching clients? Close the previous client's MCP server before requesting a new code.</p>
+            @if (!desktopMcpSetupAvailable) {
+              <p>Switching clients? Close the previous client's MCP server before requesting a new code.</p>
+            }
           }
         } @else {
           <button type="button" (click)="mcp.disconnect()">Disconnect</button>

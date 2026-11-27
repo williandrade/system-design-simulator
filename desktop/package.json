@@ -8,9 +8,11 @@
     "node": "24.x"
   },
   "scripts": {
+    "dev": "node scripts/dev.mjs",
     "package": "node scripts/package-macos.mjs"
   },
   "devDependencies": {
-    "@electron/packager": "20.3.0"
+    "@electron/packager": "20.3.0",
+    "electron": "45.5.0"
   }
 }

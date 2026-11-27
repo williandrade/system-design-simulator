@@ -5,10 +5,12 @@ import {
   Component,
   ElementRef,
   HostListener,
+  NgZone,
   OnDestroy,
   OnInit,
   ViewChild,
   inject,
+  signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
@@ -88,7 +90,7 @@ import { Challenge } from '../../core/models/challenge.model';
 import { ChallengePanelComponent } from './challenge/challenge-panel.component';
 import { OnboardingOverlayComponent } from './challenge/onboarding-overlay.component';
 import { CanvasMcpConnection } from './mcp/canvas-mcp-connection';
-import { McpSetupComponent } from './mcp/mcp-setup.component';
+import { McpSetup, McpSetupComponent } from './mcp/mcp-setup.component';
 import {
   CanvasActionMarker,
   CanvasRequest,
@@ -157,17 +159,27 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly graphBuilder = inject(GraphBuilderService);
   private readonly themeService = inject(ThemeService);
   private readonly changes = inject(ChangeDetectorRef);
+  private readonly zone = inject(NgZone);
 
   showMcpPanel = false;
   showMcpPairing = false;
   readonly desktopMcpSetupAvailable = typeof window !== 'undefined' && !!window.simulatorMcpSetup;
+  protected readonly desktopMcpSetup = signal<McpSetup | null>(null);
+  protected get mcpPairingPrompt(): string {
+    const serverId = this.desktopMcpSetupAvailable
+      ? this.desktopMcpSetup()?.serverId
+      : 'willis-overengineer-inator-web';
+    return serverId
+      ? `Call get_canvas_pairing on ${serverId} and show me the one-time code.`
+      : 'Check Configure for the MCP server for this canvas.';
+  }
   private mcpFocus?: Point;
   readonly mcp = new CanvasMcpConnection({
     activeCanvasId: () => (this.mcpAvailable ? this.tabs[this.activeTabIndex]?.id : undefined),
     apply: (request) => this.applyMcpRequest(request),
     renderAction: () => this.renderMcpAction(),
     hasRenderedAction: (marker) => this.hasRenderedMcpAction(marker),
-  });
+  }, (callback) => this.zone.run(callback));
 
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLDivElement>;
   @ViewChild('flowCanvas') flowCanvas?: FCanvasComponent;
@@ -1073,7 +1085,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     return (
       this.roleMode === 'architect' &&
       typeof window !== 'undefined' &&
-      CanvasMcpConnection.isSupportedOrigin(window.location.origin)
+      CanvasMcpConnection.canConnect(window)
     );
   }
 
@@ -1341,6 +1353,11 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
+    if (this.desktopMcpSetupAvailable) {
+      void window.simulatorMcpSetup?.get()
+        .then((setup) => this.desktopMcpSetup.set(setup))
+        .catch(() => this.desktopMcpSetup.set(null));
+    }
     this.updateMobileViewport();
     this.mobileMediaQuery = window.matchMedia(SimulatorComponent.mobileMediaQueryList);
     this.mobileMediaQuery.addEventListener('change', this.onMobileViewportChange);

@@ -2,8 +2,11 @@ import { Component, computed, signal } from '@angular/core';
 
 type McpClient = 'codex' | 'claude';
 
-interface McpSetup {
+export interface McpSetup {
+  mode: 'desktop' | 'desktop-dev';
+  serverId: string;
   launcherPath: string;
+  launcherArgs: string[];
   commands: Record<McpClient, string>;
 }
 
@@ -27,7 +30,6 @@ export class McpSetupComponent {
   private readonly desktop = typeof window === 'undefined' ? undefined : window.simulatorMcpSetup;
   protected readonly setup = signal<McpSetup | null | undefined>(undefined);
   protected readonly client = signal<McpClient>('codex');
-  protected readonly serverName = 'willis-overengineer-inator';
   protected readonly copying = signal(false);
   protected readonly copyResult = signal<{ client: McpClient; message: string } | null>(null);
   protected readonly claudeChatConfig = computed(() => {
@@ -36,7 +38,7 @@ export class McpSetupComponent {
     return JSON.stringify(
       {
         mcpServers: {
-          [this.serverName]: { command: setup.launcherPath, args: [] },
+          [setup.serverId]: { command: setup.launcherPath, args: setup.launcherArgs },
         },
       },
       null,

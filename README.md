@@ -145,51 +145,39 @@ mcp/               # Local MCP server for the Architect canvas
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- Node.js (v20+)
-- npm (v10+)
+Use Node.js 24 and npm. Electron development and packaging require an Apple Silicon Mac with ARM64 Node.js.
 
-### Installation & Run
+Clone the repository and run the commands below from its root.
 
-#### 1. Clone the repository
 ```bash
 git clone https://github.com/williandrade/system-design-simulator.git
 cd system-design-simulator
 ```
 
-#### 2. Run the Angular Frontend (Simulator)
-```bash
-cd frontend
-npm install
-npm run start
-```
-The playground opens at `http://localhost:4200/`. Existing `/playground` links also open the canvas.
+### Develop in the Electron window
 
-Run the unit/characterization test suite (Vitest) and lint:
+Install the locked dependencies on a fresh checkout or after the lockfiles change.
+
 ```bash
-npm test
-npm run lint
+npm ci --prefix backend
+npm ci --prefix frontend
+npm ci --prefix mcp
+npm ci --prefix desktop
 ```
 
-#### 3. Run the Cloudflare Workers (Pricing Scraper / Daily Analytics)
+Start development with one command.
+
 ```bash
-cd ../workers/aws-pricing-generator   # or ../workers/daily-analytics
-npm install
-npm run dev
+npm run dev --prefix desktop
 ```
 
-#### 4. Run the Pricing Validation Script
-Verify local pricing database files match the schema requirements:
-```bash
-cd ../scripts
-npm install
-# Set process environment variables or use a local .env file
-node --env-file=.env validate-pricing.mjs
-```
+The command starts Angular on `127.0.0.1:4200`, the pricing backend on `127.0.0.1:3001`, and the **Development** Electron window. CSS and templates update through Angular HMR. A full page reload may ask you to save or discard unsaved edits. You can also open the same Angular server in your browser at `http://127.0.0.1:4200/`. Press `Ctrl+C` to stop the development processes.
 
-### macOS desktop app
+To test MCP, open **MCP → Configure** in the **Development** window. Register `willis-overengineer-inator-dev`, then follow the [pairing steps](#connect-codex-or-claude-to-the-desktop-canvas). Dev and packaged Electron have separate MCP registrations and can run side by side.
 
-Build the package on an Apple Silicon Mac with ARM64 Node.js 24 and npm. Run these commands from the repository root. The build downloads the pinned Electron and Node runtimes and writes an ad hoc-signed app for local use to `desktop/dist/`.
+### Build the macOS desktop app
+
+If you already installed the development dependencies, run the last command only. For a build from a fresh checkout, run all three.
 
 ```bash
 npm ci --prefix frontend
@@ -197,15 +185,51 @@ npm ci --prefix desktop
 npm run package --prefix desktop
 ```
 
-In Finder, open `desktop/dist/Willi's Overengineer-inator-darwin-arm64/`. Copy `Willi's Overengineer-inator.app` to a stable location such as `~/Applications` and open it. The app starts the simulator and pricing API on `127.0.0.1:4200`. The included `us-east-1` pricing snapshot works without Cloudflare credentials. Other regions require access to the configured pricing KV. Release port `4200` before opening the app if a web development server is running there.
+The build downloads the pinned Electron and Node runtimes and creates an ad hoc-signed `.app` for local use. In Finder, open `desktop/dist/Willi's Overengineer-inator-darwin-arm64/`. Copy `Willi's Overengineer-inator.app` to a stable location such as `~/Applications` before you configure your MCP client.
+
+The packaged app opens directly from Finder and serves the simulator and pricing API through Electron's `app://` protocol. The included `us-east-1` pricing snapshot works without Cloudflare credentials. Other regions require configured pricing KV access.
 
 The app has its own project storage. To migrate a browser project, export its JSON from the browser and import it in the desktop app.
 
 #### Connect Codex or Claude to the desktop canvas
 
-Open an Architect canvas and select **MCP → Configure**. Choose **Codex** or **Claude**. The app shows the setup command for its bundled launcher, with instructions for using Codex desktop or Claude Desktop Chat. The command registers `willis-overengineer-inator` for first-time setup. If you already registered the server, keep that entry and update its launcher path only if you moved or renamed the app bundle.
+Open an Architect canvas and select **MCP → Configure**. Choose **Codex** or **Claude** and follow the instructions for your client. The packaged app registers `willis-overengineer-inator`. If you move or rename the app bundle, update the launcher path in the existing registration.
 
-Open a new local client session and select **MCP → Pair**. Follow the prompt to request a one-time code, enter it in the app, and select **Pair**. Ask the client to call `get_canvas_state` before it edits the canvas and keep the window visible during edits. When switching clients, stop the previous client's relay process to free port `4301`. [MCP tools and development workflow](mcp/README.md)
+Open a new local client session and select **MCP → Pair**. Follow the prompt to request a one-time code, enter it in the app, and select **Pair**. Ask the client to call `get_canvas_state` before it edits the canvas and keep the window visible during edits. Select **Disconnect** on the canvas before pairing another client. The desktop MCP connects over a private Unix socket. [MCP tools and development workflow](mcp/README.md)
+
+### Develop in a browser
+
+Install the frontend and backend dependencies if needed.
+
+```bash
+npm ci --prefix backend
+npm ci --prefix frontend
+```
+
+With the Electron dev command stopped, run the pricing backend in one terminal and Angular in another. Both listen on loopback.
+
+```bash
+BIND_HOST=127.0.0.1 PORT=3001 npm start --prefix backend
+```
+
+```bash
+npm start --prefix frontend -- --host 127.0.0.1
+```
+
+Open `http://127.0.0.1:4200/`. For MCP in the browser, follow the [browser pairing instructions](mcp/README.md#start-the-browser-playground).
+
+### Tests and supporting tools
+
+Run the frontend test suite and lint.
+
+```bash
+npm test --prefix frontend
+npm run lint --prefix frontend
+```
+
+To work on a Cloudflare Worker, open `workers/aws-pricing-generator` or `workers/daily-analytics` in a separate terminal, run `npm ci`, then run `npm run dev`.
+
+To validate local pricing data, open `scripts/`, run `npm ci`, then run `node validate-pricing.mjs` with the required environment variables set. If you use a local `.env` file, run `node --env-file=.env validate-pricing.mjs`.
 
 ---
 

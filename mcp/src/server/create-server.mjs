@@ -50,7 +50,7 @@ export function createCanvasMcpServer(relay, { operatorPairing = false } = {}) {
     }
 
     const result = params.name === 'get_canvas_pairing'
-      ? relay.issuePairing()
+      ? await relay.issuePairing()
       : await relay.request(params.name, input.data, signal);
     return toolResult(result, tool.summary);
   });

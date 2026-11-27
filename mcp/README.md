@@ -1,6 +1,8 @@
 # Local playground MCP pilot
 
-The MCP host starts `mcp/src/index.mjs` over stdio. The server relays one request at a time to an open Architect canvas via `ws://127.0.0.1:4301/canvas`. The browser applies mutations, reveals each change and acknowledges it after the visible step. The Angular playground and pricing server run normally.
+The MCP host starts `mcp/src/index.mjs` over stdio. Electron uses a private Unix socket to relay requests to the Architect canvas. The browser uses `ws://127.0.0.1:4301/canvas`. The canvas applies one request at a time and acknowledges each mutation after it appears.
+
+For the packaged or development Electron app, open **MCP → Configure** and register the server shown there. The packaged app uses `willis-overengineer-inator` and the **Development** window uses `willis-overengineer-inator-dev`. Keep the two registrations in the same host to control both windows. [Start Electron development](../README.md#develop-in-the-electron-window)
 
 ## Layout
 
@@ -23,7 +25,7 @@ mcp/
 
 Dependencies point inward: `server` and `relay` use `tools` and `shared`, and only `index.mjs` connects them. To add a tool, add an entry to `src/tools/canvas-tools.mjs` and implement its handler in the Angular canvas. Run the tests with `npm test --prefix mcp`.
 
-## Start the playground
+## Start the browser playground
 
 Use Node.js and npm. From the repository root, install the locked dependencies if needed.
 
@@ -44,6 +46,8 @@ npm start --prefix frontend -- --host 127.0.0.1
 ```
 
 Open [the Architect playground](http://localhost:4200/playground?mode=architect) in a test browser profile. Select **Add new canvas**, then **MCP → Pair** to open the pairing form. Keep the empty canvas visible throughout the run.
+
+When using a client in this browser flow, register `node /absolute/path/to/mcp/src/index.mjs` under the name `willis-overengineer-inator-web`.
 
 ## Deterministic SDK demonstration
 

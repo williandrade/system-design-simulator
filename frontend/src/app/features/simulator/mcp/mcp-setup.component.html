@@ -30,6 +30,9 @@
   </fieldset>
 
   @if (setup(); as setup) {
+    @if (setup.mode === 'desktop-dev') {
+      <p>Development canvas · <code>{{ setup.serverId }}</code></p>
+    }
     @if (client() === 'codex') {
       <h3>Codex CLI</h3>
       <p>For first-time setup, run this command in Terminal and start a new local Codex session.</p>
@@ -58,8 +61,8 @@
         <summary>Codex desktop</summary>
         <p>
           In <strong>Settings → MCP servers → Add server</strong>, choose <strong>STDIO</strong>.
-          Name the server <code>{{ serverName }}</code>, use this path as its command, and
-          leave arguments empty. Save and restart the Codex client when prompted.
+          Name the server <code>{{ setup.serverId }}</code> and use this path as its command.
+          Save and restart the Codex client when prompted.
         </p>
         <textarea
           aria-label="Launcher path"
@@ -67,16 +70,26 @@
           rows="2"
           [value]="setup.launcherPath"
         ></textarea>
+        @if (setup.launcherArgs.length) {
+          <p>Add the arguments below separately, in order.</p>
+          <ol>
+            @for (argument of setup.launcherArgs; track $index) {
+              <li><code>{{ argument }}</code></li>
+            }
+          </ol>
+        } @else {
+          <p>Leave arguments empty.</p>
+        }
       </details>
       <p>
-        If you moved the app, update only the command in the existing server entry to keep its tool
-        and approval settings.
+        If the command or arguments change, update the existing server entry to keep its tool and
+        approval settings.
       </p>
     } @else {
       <details>
         <summary>Claude Desktop Chat</summary>
         <p>
-          Add only the <code>{{ serverName }}</code> entry under <code>mcpServers</code> in
+          Add only the <code>{{ setup.serverId }}</code> entry under <code>mcpServers</code> in
           <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>. Keep
           existing entries. If the file does not exist, use the entire example.
         </p>
@@ -91,13 +104,13 @@
         </p>
       </details>
       <p>
-        If you moved the app, update only the command in the existing entry. In Claude Code,
-        <code>claude mcp get {{ serverName }}</code> shows which configuration is in use for that name.
+        If the command or arguments change, update the existing entry. In Claude Code,
+        <code>claude mcp get {{ setup.serverId }}</code> shows which configuration is in use for that name.
       </p>
     }
     <p>Then return to <strong>MCP → Pair</strong> to connect your canvas.</p>
   } @else if (setup() === undefined) {
-    <p role="status">Checking the bundled MCP launcher…</p>
+    <p role="status">Checking the MCP launcher…</p>
   } @else {
     <p role="status">
       The MCP launcher is unavailable. Reopen an intact copy of the app or rebuild it.

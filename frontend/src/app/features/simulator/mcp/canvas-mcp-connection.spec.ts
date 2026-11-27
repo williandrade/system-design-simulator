@@ -117,6 +117,59 @@ describe('Canvas MCP connection', () => {
     vi.useRealTimers();
   });
 
+  it('uses desktop pairing and ACK IPC without opening the browser relay', async () => {
+    let deliver!: (payload: string | null) => void;
+    const unsubscribe = vi.fn();
+    const bridge = {
+      pair: vi.fn(async () => true),
+      result: vi.fn(async (_token: string, _payload: string) => true),
+      disconnect: vi.fn(async () => true),
+      subscribe: vi.fn((_token, callback) => {
+        deliver = callback;
+        return unsubscribe;
+      }),
+    };
+    vi.stubGlobal('window', {
+      location: { origin: 'app://overengineer-inator' },
+      simulatorCanvasMcp: bridge,
+    });
+    const { connection, host } = createConnection();
+    connection.connect('ipc-code');
+    expect(TestSocket.instances).toHaveLength(0);
+    const token = bridge.subscribe.mock.calls[0][0];
+    expect(bridge.pair).toHaveBeenCalledWith(token, 'first', 'ipc-code');
+    deliver(JSON.stringify({ version: 1, type: 'paired', canvasId: 'first' }));
+    expect(connection.status).toBe('connected');
+    deliver(JSON.stringify({
+      version: 1,
+      type: 'request',
+      requestId: 'read-ipc',
+      canvasId: 'first',
+      tool: 'get_canvas_state',
+      args: {},
+    }));
+    expect(host.apply).toHaveBeenCalledOnce();
+    expect(bridge.result.mock.calls[0][0]).toBe(token);
+    expect(JSON.parse(bridge.result.mock.calls[0][1])).toMatchObject({ requestId: 'read-ipc', ok: true });
+
+    deliver(null);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(connection.status).toBe('disconnected');
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(bridge.disconnect).toHaveBeenCalledWith(token);
+  });
+
+  it('does not fall back to the web relay if Electron dev has no bridge', () => {
+    vi.stubGlobal('window', {
+      navigator: { userAgent: 'Chrome/1 Electron/45.5.0' },
+      location: { origin: 'http://127.0.0.1:4200' },
+    });
+    const { connection } = createConnection();
+    connection.connect('test-code');
+    expect(connection.status).toBe('disconnected');
+    expect(TestSocket.instances).toHaveLength(0);
+  });
+
   it('pairs on loopback, requires the initial read, and waits after the rendered action', async () => {
     const { connection, host, pair } = createConnection();
     const socket = pair();
