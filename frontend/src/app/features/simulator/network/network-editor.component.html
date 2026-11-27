@@ -1,0 +1,232 @@
+<section class="network-panel" aria-label="Network diagram">
+  <header>
+    <strong>Network diagram</strong>
+    <button type="button" class="close" aria-label="Close network diagram" (click)="closed.emit()">
+      ×
+    </button>
+  </header>
+  <nav aria-label="Network editing mode">
+    <button type="button" [attr.aria-pressed]="section === 'frames'" (click)="section = 'frames'">
+      Frames
+    </button>
+    <button type="button" [attr.aria-pressed]="section === 'links'" (click)="section = 'links'">
+      Diagram links
+    </button>
+    <button
+      type="button"
+      [attr.aria-pressed]="section === 'membership'"
+      (click)="section = 'membership'"
+    >
+      Services
+    </button>
+  </nav>
+  @if (disabled()) {
+    <p role="status">Stop the simulation before editing the diagram.</p>
+  }
+  <div
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    [class.feedback-error]="feedback()?.error"
+  >
+    @if (feedback(); as feedback) {
+      <p>{{ feedback.message }}</p>
+    }
+  </div>
+  @switch (section) {
+    @case ('frames') {
+      <form #frameForm="ngForm" (ngSubmit)="saveFrame(frameForm)">
+        <label
+          >Frame
+          <select
+            name="frameId"
+            aria-label="Frame"
+            data-network-initial-focus
+            [ngModel]="frameId"
+            (ngModelChange)="selectFrame($event)"
+          >
+            <option value="">New frame</option>
+            @for (frame of network().frames; track frame.id) {
+              <option [value]="frame.id">{{ frame.name }} ({{ frame.kind }})</option>
+            }
+          </select>
+        </label>
+        <label
+          >Kind
+          <select
+            name="frameKind"
+            aria-label="Kind"
+            [ngModel]="frameKind"
+            (ngModelChange)="setNewFrameKind($event)"
+            [disabled]="!!frameId"
+          >
+            <option value="vpc">VPC</option>
+            <option value="az">Availability zone</option>
+            <option value="subnet">Subnet</option>
+          </select>
+        </label>
+        <label
+          >Name <input name="frameName" [(ngModel)]="frameName" maxlength="100" required
+        /></label>
+        @if (frameKind !== 'vpc') {
+          <label
+            >Parent frame
+            <select
+              name="frameParent"
+              aria-label="Parent frame"
+              [ngModel]="frameParent"
+              (ngModelChange)="chooseFrameParent($event)"
+            >
+              <option value="">None</option>
+              @for (parent of parentsForFrame(); track parent.id) {
+                <option [value]="parent.id">{{ parent.name }}</option>
+              }
+            </select>
+          </label>
+        }
+        <div class="dimensions">
+          <label
+            >X
+            <input
+              name="frameX"
+              type="number"
+              [(ngModel)]="frameX"
+              min="-10000"
+              max="10000"
+              required
+          /></label>
+          <label
+            >Y
+            <input
+              name="frameY"
+              type="number"
+              [(ngModel)]="frameY"
+              min="-10000"
+              max="10000"
+              required
+          /></label>
+          <label
+            >Width
+            <input
+              name="frameWidth"
+              type="number"
+              [(ngModel)]="frameWidth"
+              min="1"
+              max="2000"
+              required
+          /></label>
+          <label
+            >Height
+            <input
+              name="frameHeight"
+              type="number"
+              [(ngModel)]="frameHeight"
+              min="1"
+              max="2000"
+              required
+          /></label>
+        </div>
+        <div class="actions">
+          <button type="submit" [disabled]="disabled() || frameForm.invalid || !frameName.trim()">
+            {{ frameId ? 'Save frame' : 'Add frame' }}
+          </button>
+          @if (frameId) {
+            <button type="button" [disabled]="disabled()" (click)="deleteFrame()">
+              Remove frame
+            </button>
+          }
+        </div>
+      </form>
+    }
+    @case ('links') {
+      <p>
+        <span class="dashed-sample" aria-hidden="true"></span> Dashed links show topology and carry
+        no simulated traffic.
+      </p>
+      <form #arrowForm="ngForm" (ngSubmit)="saveArrow(arrowForm)">
+        <label
+          >Diagram link
+          <select
+            name="arrowId"
+            aria-label="Diagram link"
+            [ngModel]="arrowId"
+            (ngModelChange)="selectArrow($event)"
+          >
+            <option value="">New diagram link</option>
+            @for (arrow of network().arrows; track arrow.id) {
+              <option [value]="arrow.id">
+                {{
+                  arrow.label || endpointName(arrow.sourceId) + ' → ' + endpointName(arrow.targetId)
+                }}
+              </option>
+            }
+          </select>
+        </label>
+        <label
+          >From
+          <select name="arrowSource" aria-label="From" [(ngModel)]="arrowSource" required>
+            <option value="">Select source</option>
+            @for (endpoint of endpoints(); track endpoint.id) {
+              <option [value]="endpoint.id" [disabled]="endpoint.id === arrowTarget">
+                {{ endpoint.name }}
+              </option>
+            }
+          </select>
+        </label>
+        <label
+          >To
+          <select name="arrowTarget" aria-label="To" [(ngModel)]="arrowTarget" required>
+            <option value="">Select destination</option>
+            @for (endpoint of endpoints(); track endpoint.id) {
+              <option [value]="endpoint.id" [disabled]="endpoint.id === arrowSource">
+                {{ endpoint.name }}
+              </option>
+            }
+          </select>
+        </label>
+        <label>Label <input name="arrowLabel" [(ngModel)]="arrowLabel" maxlength="100" /></label>
+        <div class="actions">
+          <button type="submit" [disabled]="disabled() || arrowForm.invalid">
+            {{ arrowId ? 'Save link' : 'Add link' }}
+          </button>
+          @if (arrowId) {
+            <button type="button" [disabled]="disabled()" (click)="deleteArrow()">
+              Remove link
+            </button>
+          }
+        </div>
+      </form>
+    }
+    @case ('membership') {
+      <form (ngSubmit)="saveMembership()">
+        <label
+          >Service
+          <select
+            name="nodeId"
+            aria-label="Service"
+            [ngModel]="nodeId"
+            (ngModelChange)="selectService($event)"
+            required
+          >
+            <option value="">Select service</option>
+            @for (node of nodes(); track node.id) {
+              <option [value]="node.id">{{ node.name }}</option>
+            }
+          </select>
+        </label>
+        <label
+          >Parent frame
+          <select name="nodeParent" aria-label="Parent frame" [(ngModel)]="nodeParent">
+            <option value="">None</option>
+            @for (frame of network().frames; track frame.id) {
+              <option [value]="frame.id">{{ frame.name }}</option>
+            }
+          </select>
+        </label>
+        <div class="actions">
+          <button type="submit" [disabled]="disabled() || !nodeId">Save membership</button>
+        </div>
+      </form>
+    }
+  }
+</section>

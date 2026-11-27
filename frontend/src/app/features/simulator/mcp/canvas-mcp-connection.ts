@@ -3,7 +3,7 @@ import {
   CanvasRequest,
   CanvasResult,
   canvasError,
-  isCanvasRead,
+  isCanvasReadRequest,
   isRecord,
   readCanvasRequest,
 } from './canvas-mcp-contract';
@@ -233,7 +233,7 @@ export class CanvasMcpConnection {
       return;
     }
 
-    const read = isCanvasRead(request.tool);
+    const read = isCanvasReadRequest(request);
     if (!read && !session.hasState) {
       this.sendResult(
         session,

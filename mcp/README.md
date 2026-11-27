@@ -1,8 +1,52 @@
-# Local playground MCP pilot
+# Local playground MCP
 
-The MCP host starts `mcp/src/index.mjs` over stdio. Electron uses a private Unix socket to relay requests to the Architect canvas. The browser uses `ws://127.0.0.1:4301/canvas`. The canvas applies one request at a time and acknowledges each mutation after it appears.
+The MCP host starts `mcp/src/index.mjs` over stdio. Electron uses a private Unix socket to relay requests to the paired canvas. The browser uses `ws://127.0.0.1:4301/canvas`. The canvas applies one request at a time and acknowledges each mutation after it appears.
 
 For the packaged or development Electron app, open **MCP → Configure** and register the server shown there. The packaged app uses `willis-overengineer-inator` and the **Development** window uses `willis-overengineer-inator-dev`. Keep the two registrations in the same host to control both windows. [Start Electron development](../README.md#develop-in-the-electron-window)
+
+## Edit a canvas
+
+1. Pair, then call `get_canvas_state` and record the canvas revision. Stop the simulation before editing.
+2. Call `list_service_types` to find service IDs, aliases and ports. For example, `alb` and `nlb` both create an `elb` node and set its `lbType`. Call `can_connect` with the same arguments as `connect_nodes` to check a proposed connection between existing nodes.
+3. Use `get_node_config_fields` to discover values, options and constraints. Apply a whole configuration patch in `set_node_config` with `{ "nodeId": "…", "fields": { "tasks": 3, "vCPU": "1", "memoryGB": 2 } }` for an ECS Fargate fixture. The existing `{ "nodeId": "…", "key": "requestRate", "value": 50 }` form still works for fixed-rate Users nodes.
+4. Use `delete_node` to remove a node and its incident links, `delete_connection` to disconnect one traffic link, and `update_node` to rename or move a node. Existing creation tools return full results by default. Pass `responseFormat: "concise"` to `add_node`, `connect_nodes` or `add_annotation` for IDs and, in the node result, ports.
+5. Use `inspect_canvas` to see potential issues before running. The `play` action can return warnings. The existing simulation rules determine whether it can start.
+
+Use `set_canvas_region` to select a region. Read `pricing.status` and, when present, `pricing.effectiveRegion` and `pricing.source` before using a cost estimate. Use frames and visual arrows to represent geography, group membership or peering. Use `connect_nodes` for traffic that should reach the simulation.
+
+### Apply an atomic change
+
+Use `apply_graph` to replace a path, draw a group of related elements, or change multiple settings in one Undo step. Submit the current `expectedRevision`. Use `dryRun: true` to validate before a destructive batch, then submit the same operations without `dryRun` once ready to apply. Reread and reconcile if someone edits the canvas between preview and application.
+
+Each operation has a `type` and `args`. Use tool names for operation types. Provide `ref` on a creation and use `$ref` in subsequent ID fields to connect new elements without another round trip. `ref` starts with a letter and may contain up to 64 letters, digits, underscores and hyphens. The batch deletes links and then nodes or frames, creates frames before their contents, applies patches, adds traffic connections and visual arrows, then edits arrows. In a creation phase, list a parent before its child. Preview IDs start with `preview:`. Read the IDs returned by the final application for later requests.
+
+Example dry-run for a frame with one service inside it. Replace the revision with the one read from your canvas.
+
+```json
+{
+  "expectedRevision": 4,
+  "dryRun": true,
+  "operations": [
+    {
+      "type": "add_frame",
+      "args": { "kind": "vpc", "name": "Staging", "x": 60, "y": 60, "width": 620, "height": 440, "ref": "staging" }
+    },
+    {
+      "type": "add_node",
+      "args": { "serviceType": "natGateway", "name": "Staging NAT", "x": 110, "y": 130, "parentId": "$staging", "ref": "nat" }
+    }
+  ]
+}
+```
+
+`import_canvas` accepts an exported simulator project object and replaces the current canvas. Read the target canvas and preview the import with `dryRun: true` before applying it.
+
+### Limits
+
+- The server works on the paired local canvas. To switch canvases, pair the target and read its state before editing.
+- The graph limit is 100 operations per batch. Batch and import requests have a 900 KiB argument limit. The resulting graph must also fit within the normalized canvas payload limit of about 950 KiB. Edit and import summaries also have a 950 KiB limit. Split independent additive diagrams into smaller canvases when required. A replacement that needs to be atomic must fit in one batch.
+- A `RESULT_UNKNOWN` means the client lost confirmation after dispatch. Reconnect and read the canvas state before deciding whether to retry.
+- Tool hints describe behaviour to MCP clients. Review destructive changes with the operator using the available client workflow. If a requested step requires manual work, explain it before editing.
 
 ## Layout
 
@@ -14,6 +58,7 @@ mcp/
 │   ├── server/create-server.mjs  # MCP server: tools/list and tools/call handlers
 │   ├── tools/
 │   │   ├── canvas-tools.mjs    # Tool registry: description, input/output schema, summary
+│   │   ├── graph-operations.mjs # Graph edit and import inputs
 │   │   └── schemas.mjs         # Shared Zod primitives
 │   ├── relay/
 │   │   ├── canvas-relay.mjs    # WebSocket relay: pairing, session, request queue
@@ -67,7 +112,7 @@ In another empty canvas, run `node mcp/scripts/demo/index.mjs burst`. The runner
 
 ## LLM demonstration with Claude Code
 
-The browser QA used Claude Code 2.1.331 with existing local authentication. The CLI runs in a disposable directory with only the seven simulator MCP tools available. Prepare the empty canvas and open **MCP → Pair** before running this block from the repository root in an interactive terminal. Paste the one-time code into the masked **Pairing code** field, select **Pair**, and start recording after the field clears.
+The baseline browser QA used Claude Code 2.1.331 with existing local authentication. The CLI runs in a disposable directory with the simulator tools needed for BASE-01. Prepare the empty canvas and open **MCP → Pair** before running this block from the repository root in an interactive terminal. Paste the one-time code into the masked **Pairing code** field, select **Pair**, and start recording after the field clears.
 
 ```sh
 (

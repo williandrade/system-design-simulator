@@ -72,7 +72,7 @@ test('the real stdio adapter starts before the app and resumes after it opens', 
   await client.connect(transport);
   t.after(() => client.close());
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 8);
+  assert.ok(tools.some((tool) => tool.name === 'apply_graph' && tool.annotations.destructiveHint));
   const call = (name, args = {}) => client.callTool({ name, arguments: args });
   assert.equal((await call('get_canvas_pairing')).structuredContent.code, 'APP_UNAVAILABLE');
 
@@ -81,15 +81,24 @@ test('the real stdio adapter starts before the app and resumes after it opens', 
   const { code, expiresInSeconds } = (await call('get_canvas_pairing')).structuredContent;
   assert.equal(expiresInSeconds, 300);
   const node = sampleNode;
+  const batch = { revision: 1, dryRun: true, createdIds: [], removedIds: [node.id], updatedIds: [], refs: {} };
   const canvas = installCanvas(broker, code, 'canvas-stdio', (message, session) => {
     assert.equal(message.version, 1);
-    const data = message.tool === 'get_canvas_state' ? sampleState('canvas-stdio') : { node };
+    const responses = { get_canvas_state: sampleState('canvas-stdio'), add_node: { node }, apply_graph: batch };
+    const data = responses[message.tool];
+    assert.ok(data);
     session.receive(resultFor(message, data));
   });
   assert.ok(canvas.session);
   assert.equal((await call('add_node', addArgs)).structuredContent.code, 'CANVAS_STATE_REQUIRED');
   assert.deepEqual((await call('get_canvas_state')).structuredContent, sampleState('canvas-stdio'));
   assert.deepEqual((await call('add_node', addArgs)).structuredContent, { node });
+  const preview = await call('apply_graph', {
+    expectedRevision: 1,
+    dryRun: true,
+    operations: [{ type: 'delete_node', args: { nodeId: node.id } }],
+  });
+  assert.deepEqual(preview.structuredContent, batch);
 });
 
 test('modes and pending codes are isolated while the first valid pair wins atomically', async (t) => {

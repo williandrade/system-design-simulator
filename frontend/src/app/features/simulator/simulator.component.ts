@@ -23,7 +23,6 @@ import {
   FSelectionChangeEvent,
 } from '@foblex/flow';
 import { Subscription } from 'rxjs';
-import { filter } from 'rxjs/operators';
 import {
   ArchitectureConnection,
   ArchitectureNode,
@@ -44,10 +43,10 @@ import {
   ProjectStorageService,
   PersistedWorkspace,
 } from '../../core/services/project-storage.service';
-import { CanvasTab, fromPersistedTab, toPersistedTab } from '../../core/models/canvas-tab.model';
+import { CanvasTab, fromPersistedTab, hasTabContent, toPersistedTab } from '../../core/models/canvas-tab.model';
 import { SimulationService } from '../../core/services/simulation.service';
 import { ValidationRuleService } from '../../core/services/validation-rule.service';
-import { CostService, CostBreakdown } from '../../core/services/cost.service';
+import { CostService, CostBreakdown, type RegionPricing } from '../../core/services/cost.service';
 import { Currency } from '../../core/models/architecture.model';
 import serviceCostModelData from '../../core/data/service-cost-model.json';
 
@@ -101,20 +100,45 @@ import {
   CanvasRequest,
   CanvasResult,
   canvasError,
-  requestRateField,
+  type GraphRequest,
+  type GraphPresentationTarget,
 } from './mcp/canvas-mcp-contract';
 import { visibleConnectionPath, visibleElement } from './mcp/canvas-mcp-visibility';
+import type { CanvasNetwork, NetworkFrame } from '../../core/models/canvas-network.model';
+import {
+  type NetworkOperation,
+  editCanvasNetwork,
+  emptyCanvasNetwork,
+  hasCanvasNetwork,
+  pruneCanvasNetworkNodes,
+  validateCanvasNetwork,
+} from '../../core/utils/canvas-network';
+import { NetworkDiagramComponent } from './network/network-diagram.component';
+import { NetworkEditorComponent } from './network/network-editor.component';
+
+import { checkCanvasConnection, stageCanvasBatch, stageCanvasEdit, type CanvasEditDependencies, type EditableCanvasGraph } from './mcp/canvas-graph-edit';
+import { getEditableConfigFields, inspectCanvas, listServiceTypes } from './mcp/canvas-mcp-domain';
+import { canvasGraphIds, stageProjectImport } from './mcp/canvas-project-import';
 
 interface PortSelection {
   node: ArchitectureNode;
   port: ServicePort;
 }
 
+// Leave room for the relay envelope and live metric values in its 1 MiB frame.
+const MCP_STATE_MAX_BYTES = 950 * 1024;
+const mcpPayloadFits = (value: unknown) =>
+  new TextEncoder().encode(JSON.stringify(value)).byteLength <= MCP_STATE_MAX_BYTES;
+
 /** Deep-cloned canvas state captured for undo/redo. */
 interface CanvasSnapshot {
+  region: string;
+  currency: Currency;
+  projectName: string;
   nodes: ArchitectureNode[];
   connections: ArchitectureConnection[];
   annotations: Annotation[];
+  network: CanvasNetwork;
 }
 
 interface ConfigField {
@@ -147,6 +171,8 @@ interface SelectField {
     OnboardingOverlayComponent,
     McpSetupComponent,
     GenericServiceEditorComponent,
+    NetworkDiagramComponent,
+    NetworkEditorComponent,
   ],
   templateUrl: './simulator.component.html',
   styleUrls: ['./simulator.component.css'],
@@ -973,7 +999,9 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   projectName = 'Untitled AWS Architecture';
   globalCurrency: Currency = 'USD';
   globalRegion: string = 'us-east-1';
-  loadingRegionCost = false;
+  regionPricing: RegionPricing = { status: 'ready', effectiveRegion: 'us-east-1', source: 'embedded' };
+  private regionLoad = 0;
+  get loadingRegionCost(): boolean { return this.regionPricing.status === 'loading'; }
   showAllServices: boolean = false;
   paletteSearch = '';
   leftCollapsed = false;
@@ -992,6 +1020,12 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   nodes: ArchitectureNode[] = [];
   connections: ArchitectureConnection[] = [];
   annotations: Annotation[] = [];
+  network = emptyCanvasNetwork();
+  protected showNetworkEditor = false;
+  protected networkFrameToEdit: NetworkFrame | undefined;
+  protected networkEditorOrigin = { x: 0, y: 0 };
+  protected networkEditorFeedback: { message: string; error: boolean } | undefined;
+  private networkEditorOpener: HTMLElement | undefined;
   packets: DataPacket[] = [];
   selectedNodeIds: string[] = [];
   selectedConnectionIds: string[] = [];
@@ -1071,14 +1105,11 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private activePort?: PortSelection;
   private snapshotSubscription?: Subscription;
-  private unsupportedRegionSubscription?: Subscription;
   private minimapHideTimer?: ReturnType<typeof setTimeout>;
   private mobileMediaQuery?: MediaQueryList;
   private wasMobileViewport = false;
   private readonly onMobileViewportChange = (): void => this.updateMobileViewport();
 
-  /** Region code that was active before the user switched to an unsupported region */
-  previousRegion = 'us-east-1';
   /** Controls visibility of the unsupported region popup */
   showUnsupportedRegion = false;
   /** The unsupported region code to display in the popup */
@@ -1107,119 +1138,198 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.mcp.disconnect();
   }
 
+  private canvasRevision = 0;
+  private canvasFingerprint = '';
+
+  private graphForMcp(): EditableCanvasGraph {
+    return {
+      nodes: this.nodes, connections: this.connections, annotations: this.annotations,
+      network: this.network, region: this.globalRegion,
+    };
+  }
+
+  private mcpEditDependencies(): CanvasEditDependencies {
+    return { factory: this.factory, validation: this.validation, catalog: this.catalog, regions: this.costService.regions };
+  }
+
+  private currentCanvasRevision(): number {
+    const fingerprint = JSON.stringify({
+      nodes: this.nodes.map(({ metrics, status, selected, ...node }) => node),
+      connections: this.connections.map(({ traffic, ...connection }) => connection),
+      annotations: this.annotations.map(({ selected, ...annotation }) => annotation),
+      region: this.globalRegion, network: this.network,
+      currency: this.globalCurrency, projectName: this.projectName,
+    });
+    if (fingerprint !== this.canvasFingerprint) {
+      this.canvasFingerprint = fingerprint;
+      this.canvasRevision++;
+    }
+    return this.canvasRevision;
+  }
+
+  private publishCanvasGraph(graph: EditableCanvasGraph, project?: { name: string; currency: Currency }): void {
+    this.pushHistory();
+    this.nodes = graph.nodes;
+    this.connections = graph.connections;
+    this.annotations = graph.annotations;
+    this.network = graph.network;
+    if (project) {
+      this.projectName = project.name;
+      this.globalCurrency = project.currency;
+    }
+    if (this.globalRegion !== graph.region) {
+      this.globalRegion = graph.region;
+      this.loadRegionCost(graph.region);
+    }
+    this.clearSelection();
+    this.activePort = undefined;
+    this.simulation.updateNodes(this.nodes, this.connections);
+    this.revealMinimap();
+    this.afterGraphMutated();
+    this.saveActiveTabState();
+  }
+
   private applyMcpRequest(request: CanvasRequest): CanvasResult {
-    if (request.tool === 'get_canvas_state') {
-      return {
-        ok: true,
-        data: {
-          canvasId: request.canvasId,
-          nodes: this.nodes,
-          connections: this.connections,
-          annotations: this.annotations,
-          region: this.globalRegion,
-          currency: this.globalCurrency,
-          mode: this.mode as SimulationMode,
-          tick: this.simulation.tick,
-          totals: this.totals,
-        },
-      };
+    const graph = this.graphForMcp();
+    switch (request.tool) {
+      case 'get_canvas_state':
+        if (!mcpPayloadFits(graph)) {
+          return canvasError('STATE_TOO_LARGE', 'The canvas exceeds the MCP read limit. Export it in the app or use a smaller canvas.');
+        }
+        return {
+          ok: true,
+          data: {
+            ...graph, canvasId: request.canvasId, currency: this.globalCurrency,
+            mode: this.mode, tick: this.simulation.tick, totals: this.totals,
+            revision: this.currentCanvasRevision(), pricing: this.regionPricing,
+          },
+        };
+      case 'get_node_config_fields': {
+        const node = graph.nodes.find((candidate) => candidate.id === request.args.nodeId);
+        if (!node) return canvasError('INVALID_ARGUMENT', 'The node is not on this canvas.');
+        return { ok: true, data: { nodeId: node.id, fields: this.mode === 'idle' ? getEditableConfigFields(node) : [] } };
+      }
+      case 'list_service_types':
+        return { ok: true, data: listServiceTypes(this.catalog, this.validation.rules, request.args) };
+      case 'can_connect':
+        return { ok: true, data: checkCanvasConnection(graph, request.args, this.validation) };
+      case 'inspect_canvas':
+        return { ok: true, data: inspectCanvas(this.nodes, this.connections) };
+      case 'set_simulation':
+        return this.applyMcpSimulation(request);
     }
-    if (request.tool === 'get_node_config_fields') {
-      const node = this.nodes.find((candidate) => candidate.id === request.args.nodeId);
-      if (!node) return canvasError('INVALID_ARGUMENT', 'The node is not on this canvas.');
-      const field = this.mode === 'idle' ? requestRateField(node) : undefined;
-      return { ok: true, data: { nodeId: node.id, fields: field ? [field] : [] } };
-    }
-    if (request.tool === 'set_simulation') return this.applyMcpSimulation(request);
+
     if (this.mode !== 'idle') {
       return canvasError('INVALID_STATE', 'Stop the simulation before editing this canvas.');
     }
 
+    const dependencies = this.mcpEditDependencies();
+    if (request.tool === 'apply_graph' || request.tool === 'import_canvas') {
+      const revision = this.currentCanvasRevision();
+      if (request.args.expectedRevision !== revision) {
+        return canvasError('STALE_REVISION', 'The canvas changed. Read get_canvas_state and update the requested edits.');
+      }
+      const dryRun = request.args.dryRun === true;
+      let staged: EditableCanvasGraph;
+      let data: { createdIds: string[]; removedIds: string[]; updatedIds: string[]; refs: Record<string, string> };
+      let project: { name: string; currency: Currency } | undefined;
+      try {
+        if (request.tool === 'apply_graph') {
+          const { graph: changed, ...summary } = stageCanvasBatch(graph, request.args.operations, dependencies, dryRun);
+          staged = changed;
+          data = summary;
+        } else {
+          const imported = stageProjectImport(request.args.project, dependencies);
+          project = imported;
+          staged = imported.graph;
+          const before = new Set(canvasGraphIds(graph));
+          const after = new Set(canvasGraphIds(staged));
+          data = {
+            createdIds: [...after].filter((id) => !before.has(id)),
+            removedIds: [...before].filter((id) => !after.has(id)),
+            updatedIds: [...after].filter((id) => before.has(id)),
+            refs: {},
+          };
+        }
+      } catch (error) {
+        return canvasError('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Invalid graph edit.');
+      }
+      if (!mcpPayloadFits(staged)) {
+        return canvasError('STATE_TOO_LARGE', 'This change would exceed the MCP canvas read limit. Use a smaller project.');
+      }
+      const result = { ...data, revision, dryRun };
+      if (!mcpPayloadFits(result)) {
+        return canvasError('RESULT_TOO_LARGE', 'This change would return too many item IDs. Import into an empty canvas or use a smaller project.');
+      }
+      if (dryRun) return { ok: true, data: result };
+
+      this.publishCanvasGraph(staged, project);
+      const presentation = this.focusMcpGraphChange(new Set([...data.createdIds, ...data.updatedIds]));
+      return {
+        ok: true,
+        data: { ...result, revision: this.currentCanvasRevision() },
+        action: {
+          tool: request.tool, targetId: presentation?.id ?? request.canvasId,
+          target: presentation?.kind, removedIds: data.removedIds,
+          description: `${request.tool === 'import_canvas' ? 'Imported project' : 'Applied graph edit'} · ${data.createdIds.length} added · ${data.removedIds.length} removed · ${data.updatedIds.length} updated.`,
+        },
+      };
+    }
+
+    return this.applyMcpGraphEdit(request, graph, dependencies);
+  }
+
+  private applyMcpGraphEdit(request: GraphRequest, graph: EditableCanvasGraph, dependencies: CanvasEditDependencies): CanvasResult {
+    let edit;
+    try {
+      edit = stageCanvasEdit(graph, request, dependencies);
+    } catch (error) {
+      return canvasError('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Invalid canvas edit.');
+    }
+    if (!mcpPayloadFits(edit.graph)) {
+      return canvasError('STATE_TOO_LARGE', 'This change would exceed the MCP canvas read limit. Use a smaller canvas.');
+    }
+    this.publishCanvasGraph(edit.graph);
+    const node = this.nodes.find((candidate) => candidate.id === edit.targetId);
+    if (node && ['add_node', 'update_node', 'set_node_config'].includes(request.tool)) {
+      this.selectNode(node.id);
+      this.mcpFocus = this.mcpNodeCenter(node);
+    }
+    const frame = this.network.frames.find((candidate) => candidate.id === edit.targetId);
+    if (frame) this.mcpFocus = { x: frame.x + 36, y: frame.y + 18 };
+    if (request.tool === 'add_arrow' || request.tool === 'update_arrow') {
+      this.focusMcpGraphChange(new Set([edit.targetId]));
+    }
+    const marker = { targetId: edit.targetId, description: edit.description };
     switch (request.tool) {
-      case 'add_node': {
-        const { serviceType, name, x, y } = request.args;
-        const service = this.catalog.find((candidate) => candidate.type === serviceType);
-        if (!service) return canvasError('INVALID_ARGUMENT', 'The service type is not in the catalog.');
-        const node = this.addService(service.type, x, y, name);
-        this.mcpFocus = this.mcpNodeCenter(node);
-        return {
-          ok: true,
-          data: { node },
-          action: { tool: request.tool, targetId: node.id, description: `Added ${node.name}.` },
-        };
+      case 'add_node':
+        this.onboarding.notify('nodeAdded');
+        break;
+      case 'connect_nodes': {
+        this.onboarding.notify('edgeCreated');
+        const connection = this.connections.find((candidate) => candidate.id === edit.targetId);
+        if (connection) this.mcpFocus = this.connectionMidpoint(connection);
+        break;
       }
-      case 'connect_nodes':
-        return this.applyMcpConnection(request);
-      case 'set_node_config':
-        return this.applyMcpConfig(request);
       case 'add_annotation': {
-        const { x, y, ...details } = request.args;
-        const annotation = this.addAnnotation(x, y, details);
-        this.mcpFocus = { x: x + annotation.width / 2, y: y + annotation.height / 2 };
-        return {
-          ok: true,
-          data: { annotation },
-          action: { tool: request.tool, targetId: annotation.id, description: 'Added a note.' },
-        };
+        this.selectAnnotation(edit.targetId);
+        const { x, y, width, height } = request.args;
+        this.mcpFocus = { x: x + width / 2, y: y + height / 2 };
+        break;
       }
+      case 'set_node_config':
+        this.rightCollapsed = false;
+        this.onboarding.notify('configChanged');
+        if ('fields' in request.args) {
+          this.advancedConfigExpanded = true;
+          return { ok: true, data: edit.data, action: { ...marker, tool: request.tool, fields: request.args.fields } };
+        }
+        return { ok: true, data: edit.data, action: { ...marker, tool: request.tool, value: request.args.value } };
+      case 'set_canvas_region':
+        edit.data['pricing'] = this.regionPricing;
+        break;
     }
-  }
-
-  private applyMcpConnection(request: Extract<CanvasRequest, { tool: 'connect_nodes' }>): CanvasResult {
-    const { sourceNodeId, sourcePortId, targetNodeId, targetPortId } = request.args;
-    const source = this.nodes.find((node) => node.id === sourceNodeId);
-    const target = this.nodes.find((node) => node.id === targetNodeId);
-    const output = source?.ports.find(
-      (port) => port.id === sourcePortId && port.direction === 'output',
-    );
-    const input = target?.ports.find(
-      (port) => port.id === targetPortId && port.direction === 'input',
-    );
-    if (!source || !target || !output || !input) {
-      return canvasError(
-        'INVALID_ARGUMENT',
-        'Select an existing output port and input port on this canvas.',
-      );
-    }
-    const result = this.tryCreateConnection(source, output, target, input, false);
-    if ('error' in result) return canvasError('INVALID_ARGUMENT', result.error);
-    this.mcpFocus = this.connectionMidpoint(result.connection);
-    return {
-      ok: true,
-      data: result,
-      action: {
-        tool: request.tool,
-        targetId: result.connection.id,
-        description: `Connected ${source.name} to ${target.name}.`,
-      },
-    };
-  }
-
-  private applyMcpConfig(request: Extract<CanvasRequest, { tool: 'set_node_config' }>): CanvasResult {
-    const { nodeId, key, value } = request.args;
-    const node = this.nodes.find((candidate) => candidate.id === nodeId);
-    if (!node || !requestRateField(node)) {
-      return canvasError(
-        'INVALID_ARGUMENT',
-        'Edit requestRate on a Users node with fixed traffic and Dynamic RPS off.',
-      );
-    }
-    this.pushHistory();
-    this.applyServiceConfig([nodeId], { [key]: value });
-    this.selectNode(nodeId);
-    this.rightCollapsed = false;
-    this.onConfigChange();
-    this.mcpFocus = this.mcpNodeCenter(node);
-    return {
-      ok: true,
-      data: { nodeId, key, value },
-      action: {
-        tool: request.tool,
-        targetId: nodeId,
-        value,
-        description: `${node.name} now sends ${value} RPS.`,
-      },
-    };
+    return { ok: true, data: edit.data, action: { ...marker, tool: request.tool } };
   }
 
   private applyMcpSimulation(request: Extract<CanvasRequest, { tool: 'set_simulation' }>): CanvasResult {
@@ -1228,12 +1338,13 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (action === 'stop' ? this.mode === 'idle' : this.mode !== expectedMode[action]) {
       return canvasError('INVALID_STATE', `Cannot ${action} when the simulation is ${this.mode}.`);
     }
+    const diagnostics = action === 'play' ? inspectCanvas(this.nodes, this.connections) : undefined;
     if (action === 'play') {
       const issue = this.nodes
         .map((node) => this.calculateNodeHealth(node))
         .find((health) => health.tone === 'error' && health.blocksRun);
       if (issue) return canvasError('INVALID_STATE', issue.message);
-      this.startSimulation();
+      this.startSimulation(diagnostics?.issues);
     } else if (action === 'stop') {
       this.stopSimulation();
     } else {
@@ -1242,12 +1353,14 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     const mode = this.mode as SimulationMode;
     return {
       ok: true,
-      data: { mode },
+      data: { mode, ...diagnostics },
       action: {
         tool: request.tool,
         targetId: request.canvasId,
         mode,
-        description: `Simulation ${mode}.`,
+        description: diagnostics?.issues.length
+          ? `Simulation ${mode}. ${diagnostics.issues.length} canvas warning(s).`
+          : `Simulation ${mode}.`,
       },
     };
   }
@@ -1256,11 +1369,47 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     return { x: node.x + 74, y: node.y + 47 };
   }
 
+  private mcpDiagramCenter(id: string): Point | undefined {
+    const frame = this.network.frames.find((item) => item.id === id);
+    if (frame) return { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
+    const node = this.nodes.find((item) => item.id === id);
+    return node ? this.mcpNodeCenter(node) : undefined;
+  }
+
+  private focusMcpGraphChange(ids: ReadonlySet<string>): { id: string; kind: GraphPresentationTarget } | undefined {
+    const node = this.nodes.find((item) => ids.has(item.id));
+    if (node) {
+      this.mcpFocus = this.mcpNodeCenter(node);
+      return { id: node.id, kind: 'node' };
+    }
+    const frame = this.network.frames.find((item) => ids.has(item.id));
+    if (frame) {
+      this.mcpFocus = { x: frame.x + 36, y: frame.y + 18 };
+      return { id: frame.id, kind: 'frame' };
+    }
+    const connection = this.connections.find((item) => ids.has(item.id));
+    if (connection) {
+      this.mcpFocus = this.connectionMidpoint(connection);
+      return { id: connection.id, kind: 'connection' };
+    }
+    const annotation = this.annotations.find((item) => ids.has(item.id));
+    if (annotation) {
+      this.mcpFocus = { x: annotation.x + annotation.width / 2, y: annotation.y + annotation.height / 2 };
+      return { id: annotation.id, kind: 'annotation' };
+    }
+    const arrow = this.network.arrows.find((item) => ids.has(item.id));
+    if (!arrow) return undefined;
+    const source = this.mcpDiagramCenter(arrow.sourceId);
+    const target = this.mcpDiagramCenter(arrow.targetId);
+    if (source && target) this.mcpFocus = { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 };
+    return { id: arrow.id, kind: 'arrow' };
+  }
+
   private renderMcpAction(): void {
     const focus = this.mcpFocus;
     this.mcpFocus = undefined;
     this.changes.detectChanges();
-    if (this.mcp.lastAction?.tool === 'set_node_config') {
+    if (this.mcp.lastAction?.tool === 'set_node_config' && this.mcp.lastAction.value !== undefined) {
       const root: HTMLElement = this.elementRef.nativeElement;
       root.querySelector('[data-mcp-request-rate]')?.scrollIntoView({ block: 'nearest' });
     }
@@ -1296,13 +1445,55 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       return false;
     }
 
-    const targetStyle = {
+    const id = CSS.escape(marker.targetId);
+    const node = `.node-card[data-node-id="${id}"]`;
+    const frame = `[data-network-frame-id="${id}"]`;
+    const arrow = `[data-network-arrow-id="${id}"]`;
+    if (marker.tool === 'delete_node') {
+      return !this.nodes.some((item) => item.id === marker.targetId) && !root.querySelector(node);
+    }
+    if (marker.tool === 'delete_connection') return !root.querySelector(`[data-connection-id="${id}"]`);
+    if (marker.tool === 'delete_frame') return !root.querySelector(frame);
+    if (marker.tool === 'delete_arrow') return !root.querySelector(arrow);
+    if (marker.tool === 'set_canvas_region') {
+      const display = root.querySelector('.region-select-display');
+      return this.globalRegion === marker.targetId && (!display || display.textContent?.trim() === marker.targetId);
+    }
+
+    const viewport = this.canvasRef.nativeElement.getBoundingClientRect();
+    if (marker.tool === 'add_frame' || marker.tool === 'update_frame') {
+      const element = root.querySelector<HTMLElement>(`${frame} .frame-title`);
+      return !!element && visibleElement(element, viewport);
+    }
+    if (marker.tool === 'add_arrow' || marker.tool === 'update_arrow') {
+      return this.hasRenderedMcpArrow(root.querySelector(`${arrow} line`), viewport);
+    }
+    if (marker.tool === 'apply_graph' || marker.tool === 'import_canvas') {
+      const liveItems = new Set(canvasGraphIds(this.graphForMcp()));
+      if (marker.removedIds.some((removedId) => liveItems.has(removedId))) return false;
+      if (!marker.target) return true;
+      if (marker.target === 'arrow') return this.hasRenderedMcpArrow(root.querySelector(`${arrow} line`), viewport);
+      if (marker.target === 'connection') {
+        const connection = root.querySelector(`[data-connection-id="${id}"]`);
+        return !!connection && visibleConnectionPath(connection, viewport);
+      }
+      const selector = {
+        node, frame: `${frame} .frame-title`, annotation: `[data-annotation-id="${id}"]`,
+      }[marker.target];
+      const element = root.querySelector<HTMLElement>(selector);
+      return !!element && visibleElement(element, viewport);
+    }
+
+    const targetStyles: Partial<Record<CanvasActionMarker['tool'], string>> = {
       add_node: '.node-card',
+      update_node: '.node-card',
       connect_nodes: 'f-connection',
       add_annotation: '.annotation-node',
       set_node_config: '.node-card',
       set_simulation: '.run-stats',
-    }[marker.tool];
+    };
+    const targetStyle = targetStyles[marker.tool];
+    if (!targetStyle) return true;
     const target = root.querySelector<HTMLElement>(
       `${targetStyle}.mcp-highlight[data-mcp-highlighted-target="${CSS.escape(marker.targetId)}"]`,
     );
@@ -1316,7 +1507,6 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       );
     }
 
-    const viewport = this.canvasRef.nativeElement.getBoundingClientRect();
     const tabs = this.canvasRef.nativeElement.querySelector('.canvas-tab-bar');
     const clip = {
       left: viewport.left,
@@ -1327,7 +1517,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (marker.tool === 'connect_nodes') return visibleConnectionPath(target, clip);
     if (!visibleElement(target, clip)) return false;
 
-    if (marker.tool === 'set_node_config') {
+    if (marker.tool === 'set_node_config' && marker.value !== undefined) {
       const field = root.querySelector<HTMLInputElement>('[data-mcp-request-rate]');
       const inspector = field?.closest('.sidebar-content');
       return (
@@ -1337,7 +1527,35 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
         visibleElement(field, inspector.getBoundingClientRect())
       );
     }
+    if (marker.tool === 'set_node_config' && marker.fields) {
+      return this.hasRenderedMcpFields(root, marker.fields);
+    }
     return true;
+  }
+
+  private hasRenderedMcpArrow(line: Element | null, viewport: DOMRectReadOnly): boolean {
+    if (!line) return false;
+    const rect = line.getBoundingClientRect();
+    return rect.right >= viewport.left && rect.left <= viewport.right
+      && rect.bottom >= viewport.top && rect.top <= viewport.bottom;
+  }
+
+  private hasRenderedMcpFields(root: HTMLElement, fields: Record<string, unknown>): boolean {
+    const generic = root.querySelector('app-generic-service-editor');
+    return Object.entries(fields).every(([key, value]) => {
+      if (generic && key === 'properties' && Array.isArray(value)) {
+        const rows = generic.querySelectorAll('.property-row');
+        const propertyCount = generic.querySelectorAll('.remove-property').length;
+        return propertyCount === value.length && value.every((property, index) => {
+          const inputs = rows[index]?.querySelectorAll('input');
+          return inputs?.[0]?.value === property.key && inputs?.[1]?.value === property.value;
+        });
+      }
+      const selector = generic ? '.label-field input' : `[data-mcp-config-field="${CSS.escape(key)}"] input, [data-mcp-config-field="${CSS.escape(key)}"] select`;
+      const control = (generic ?? root).querySelector<HTMLInputElement | HTMLSelectElement>(selector);
+      if (control instanceof HTMLInputElement && control.type === 'checkbox') return control.checked === value;
+      return !!control && control.value === String(value);
+    });
   }
 
   toggleTheme(): void {
@@ -1370,16 +1588,12 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.mobileMediaQuery.addEventListener('change', this.onMobileViewportChange);
 
     const workspace = this.storage.loadWorkspace();
-    const hasWorkspaceContent =
-      !!workspace &&
-      Array.isArray(workspace.tabs) &&
-      workspace.tabs.some((t) => (t.nodes?.length ?? 0) > 0);
 
     const local = this.storage.loadLocal();
     // Prefer the full multi-tab workspace so every saved canvas is restored.
     // Fall back to the single saved project, then to the preset/dev blank.
-    if (hasWorkspaceContent) {
-      this.restoreWorkspace(workspace!);
+    if (workspace?.tabs.some(hasTabContent)) {
+      this.restoreWorkspace(workspace);
     } else if (
       local &&
       local.id !== 'preset-ecommerce-serverless' &&
@@ -1422,16 +1636,6 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       this.refreshHealthHold();
     });
-
-    // Subscribe to unsupported region events from the cost service
-    this.unsupportedRegionSubscription = this.costService.unsupportedRegion$
-      .pipe(filter((code) => code !== null))
-      .subscribe((code) => {
-        this.unsupportedRegionCode = code!;
-        this.showUnsupportedRegion = true;
-        // Revert to the previous valid region silently (without re-fetching)
-        this.globalRegion = this.previousRegion;
-      });
 
     // First visit: surface the keyboard shortcuts once. Desktop only (shortcuts
     // are irrelevant on touch). Defer if the guided tour is running.
@@ -1614,7 +1818,6 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.stopResizeLeft();
     this.stopResizeRight();
     this.snapshotSubscription?.unsubscribe();
-    this.unsupportedRegionSubscription?.unsubscribe();
     this.challengeSubscription?.unsubscribe();
     if (this.milestonePopupTimer) clearTimeout(this.milestonePopupTimer);
     this.mobileMediaQuery?.removeEventListener('change', this.onMobileViewportChange);
@@ -1938,7 +2141,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get costBreakdown(): CostBreakdown | null {
     const node = this.selectedNode;
-    if (!node || node.type === 'generic') return null;
+    if (!node || node.type === 'generic' || this.regionPricing.status !== 'ready') return null;
 
     const configSignature = JSON.stringify(node.config);
     const cache = this._costBreakdownCache;
@@ -2161,6 +2364,8 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get totalCostFormatted(): string {
+    if (this.regionPricing.status === 'loading') return 'Loading…';
+    if (this.regionPricing.status === 'unavailable') return 'Unavailable';
     const symbol = this.costService.getCurrencySymbol(this.globalCurrency);
     return `${symbol}${this.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
@@ -2192,6 +2397,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   getNodeCostFormatted(node: ArchitectureNode): string {
+    if (this.regionPricing.status !== 'ready') return '—';
     const cost =
       this.costService.calculateNodeCostUsd(node, this.globalRegion, this.nodes) *
       (this.globalCurrency === 'USD'
@@ -2202,6 +2408,8 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   setCurrency(currency: Currency): void {
+    if (currency === this.globalCurrency) return;
+    this.pushHistory();
     this.globalCurrency = currency;
   }
 
@@ -2272,11 +2480,12 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     // Calculate node costs in USD
     const nodeCosts = new Map<string, number>();
     let totalUsd = 0;
+    const pricesReady = this.regionPricing.status === 'ready';
     for (const node of this.nodes) {
       if (node.type === 'client' || node.type === 'generic') {
         continue;
       }
-      const usd = this.costService.calculateNodeCostUsd(node, this.globalRegion, this.nodes);
+      const usd = pricesReady ? this.costService.calculateNodeCostUsd(node, this.globalRegion, this.nodes) : 0;
       nodeCosts.set(node.id, usd);
       totalUsd += usd;
     }
@@ -2323,10 +2532,10 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
         name: def.name,
         overview: docs[type]?.overview || def.description || '',
         totalCost: info.cost,
-        formattedCost: `${symbol}${(info.cost * rate).toLocaleString('en-US', {
+        formattedCost: pricesReady ? `${symbol}${(info.cost * rate).toLocaleString('en-US', {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
-        })}`,
+        })}` : '—',
         pct,
         count: info.nodes.length,
       });
@@ -2351,6 +2560,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     formatted: string;
     pct: number;
   }[] {
+    if (this.regionPricing.status !== 'ready') return [];
     const rate =
       this.globalCurrency === 'USD' ? 1 : this.costService['conversionRates'][this.globalCurrency];
     const symbol = this.costService.getCurrencySymbol(this.globalCurrency);
@@ -2374,24 +2584,28 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   setRegion(region: string): void {
-    this.previousRegion = this.globalRegion; // Save before switching
+    if (region === this.globalRegion) return;
+    this.pushHistory();
     this.globalRegion = region;
-    this.loadRegionCost(region);
+    this.loadRegionCost(region, true);
+    this.saveActiveTabState();
   }
 
-  loadRegionCost(region: string): void {
-    this.loadingRegionCost = true;
-    this.costService
-      .loadRegionPricing(region)
-      .then(() => {
-        this.loadingRegionCost = false;
-        this.onConfigChange();
-      })
-      .catch((err) => {
-        console.error('Failed to load region pricing: ', err);
-        this.loadingRegionCost = false;
-        this.onConfigChange();
-      });
+  loadRegionCost(region: string, showUnavailableDialog = false): void {
+    const request = ++this.regionLoad;
+    this.showUnsupportedRegion = false;
+    this.unsupportedRegionCode = '';
+    this.regionPricing = { status: 'loading' };
+    void this.costService.loadRegionPricing(region).then((pricing) => {
+      if (request !== this.regionLoad) return;
+      this.regionPricing = pricing;
+      if (showUnavailableDialog && pricing.status === 'unavailable') {
+        this.unsupportedRegionCode = region;
+        this.showUnsupportedRegion = true;
+      }
+      this._costBreakdownCache = null;
+      this.changes.markForCheck();
+    });
   }
 
   dismissUnsupportedRegion(): void {
@@ -2409,21 +2623,53 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  /** True when the active canvas has any services, connections, or notes. */
+  /** True when the active canvas has saved or editable diagram content. */
   private canvasHasContent(): boolean {
-    return this.nodes.length > 0 || this.connections.length > 0 || this.annotations.length > 0;
+    return hasTabContent(this);
   }
 
   /** True when a given tab (active or not) holds any content. */
   private tabHasContent(index: number): boolean {
     if (index === this.activeTabIndex) return this.canvasHasContent();
     const t = this.tabs[index];
-    return (
-      !!t &&
-      ((t.nodes?.length ?? 0) > 0 ||
-        (t.connections?.length ?? 0) > 0 ||
-        (t.annotations?.length ?? 0) > 0)
-    );
+    return !!t && hasTabContent(t);
+  }
+
+  protected openNetworkEditor(frame?: NetworkFrame): void {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) this.networkEditorOpener = active;
+    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
+    const position = this.toCanvasPoint(rect.left + Math.min(330, rect.width / 2), rect.top + 78);
+    this.networkEditorOrigin = { x: Math.round(position.x), y: Math.round(position.y) };
+    this.networkFrameToEdit = frame;
+    this.networkEditorFeedback = undefined;
+    this.showNetworkEditor = true;
+  }
+
+  protected closeNetworkEditor(restoreFocus = false): void {
+    this.showNetworkEditor = false;
+    this.networkFrameToEdit = undefined;
+    this.networkEditorFeedback = undefined;
+    if (restoreFocus && this.networkEditorOpener?.isConnected) this.networkEditorOpener.focus();
+    this.networkEditorOpener = undefined;
+  }
+
+  protected editNetworkDiagram(operation: NetworkOperation): void {
+    if (this.mode !== 'idle') return;
+    try {
+      const graph = this.graphForMcp();
+      const { network, nodes, id } = editCanvasNetwork(this.network, this.nodes, operation, newId);
+      this.publishCanvasGraph({ ...graph, network, nodes });
+      if (operation.type === 'add_frame' || operation.type === 'update_frame') {
+        this.networkFrameToEdit = network.frames.find((frame) => frame.id === id);
+      }
+      this.networkEditorFeedback = { message: 'Network diagram updated.', error: false };
+    } catch (error) {
+      this.networkEditorFeedback = {
+        message: error instanceof Error ? error.message : 'Invalid network diagram edit.',
+        error: true,
+      };
+    }
   }
 
   /** True when a tab has content AND unsaved edits (orange dot). New empty
@@ -2576,6 +2822,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     const mod = event.ctrlKey || event.metaKey;
     const target = event.target as HTMLElement;
     if (target.closest?.('dialog[open]')) return;
+    const inNetworkEditor = !!target.closest?.('app-network-editor');
     const inEditable =
       ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.contentEditable === 'true';
 
@@ -2599,17 +2846,17 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
         this.redo();
         return;
       }
-      if (k === 'c') {
+      if (k === 'c' && !inNetworkEditor) {
         event.preventDefault();
         this.copySelection();
         return;
       }
-      if (k === 'v') {
+      if (k === 'v' && !inNetworkEditor) {
         event.preventDefault();
         this.pasteClipboard();
         return;
       }
-      if (k === 'd') {
+      if (k === 'd' && !inNetworkEditor) {
         event.preventDefault();
         this.duplicateSelection();
         return;
@@ -2640,6 +2887,10 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
         this.resolveLeaveGuard('cancel');
         return;
       }
+      if (this.showNetworkEditor && inNetworkEditor) {
+        this.closeNetworkEditor(true);
+        return;
+      }
       if (!inEditable && this.hasSelection) {
         this.clearSelection();
         return;
@@ -2649,7 +2900,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (event.key !== 'Delete' && event.key !== 'Backspace') {
       return;
     }
-    if (inEditable) {
+    if (inEditable || inNetworkEditor) {
       return;
     }
     if (this.hasSelection) {
@@ -2933,6 +3184,17 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     targetPort: ServicePort,
     allowAlternative = true,
   ): { connection: ArchitectureConnection } | { error: string } {
+    const liveSource = this.nodes.find((node) => node.id === sourceNode.id);
+    const liveTarget = this.nodes.find((node) => node.id === targetNode.id);
+    const liveOutput = liveSource?.ports.find((port) => port.id === sourcePort.id);
+    const liveInput = liveTarget?.ports.find((port) => port.id === targetPort.id);
+    if (!liveSource || !liveTarget || !liveOutput || !liveInput) {
+      return { error: 'Choose existing nodes and ports on this canvas.' };
+    }
+    sourceNode = liveSource;
+    targetNode = liveTarget;
+    sourcePort = liveOutput;
+    targetPort = liveInput;
     let finalSourcePort = sourcePort;
     let finalTargetPort = targetPort;
     let result = this.validation.validate(
@@ -3044,6 +3306,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
           !this.selectedNodeIds.includes(c.targetNodeId),
       );
       this.nodes = this.nodes.filter((n) => !this.selectedNodeIds.includes(n.id));
+      this.network = pruneCanvasNetworkNodes(this.network, this.selectedNodeIds);
     }
 
     // 3. Delete selected annotations
@@ -3182,7 +3445,9 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.afterGraphMutated();
   }
 
-  startSimulation(): void {
+  simulationWarning = '';
+
+  startSimulation(issues = inspectCanvas(this.nodes, this.connections).issues): void {
     if (this.isSimulationDisabled) {
       this.setMessage(
         'Fix integration errors (red health cards) before running the simulation.',
@@ -3190,8 +3455,14 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       );
       return;
     }
+    this.simulationWarning = issues.length ? `${issues[0].message}${issues.length > 1 ? ` (+${issues.length - 1} more)` : ''}` : '';
     this.simulation.start(this.nodes, this.connections);
-    this.setMessage('Simulation started. Real-time traffic is flowing.', 'success');
+    this.setMessage(
+      issues.length
+        ? `Simulation started with ${issues.length} canvas warning(s).`
+        : 'Simulation started. Real-time traffic is flowing.',
+      issues.length ? 'neutral' : 'success',
+    );
     this.onboarding.notify('simulationStarted');
   }
 
@@ -3306,12 +3577,13 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.mcp.disconnect();
     this.simulation.stop();
     // Record the pre-clear state so Ctrl+Z can bring the architecture back.
-    if (this.nodes.length > 0 || this.connections.length > 0 || this.annotations.length > 0) {
+    if (this.canvasHasContent()) {
       this.pushHistory();
     }
     this.nodes = [];
     this.connections = [];
     this.annotations = [];
+    this.network = emptyCanvasNetwork();
     this.packets = [];
     this.clearSelection();
     this.setMessage('Canvas reset.', 'neutral');
@@ -3778,6 +4050,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.nodes = [client];
     this.connections = [];
     this.annotations = [];
+    this.network = emptyCanvasNetwork();
     this.packets = [];
     this.clearSelection();
     this.saveActiveTabState();
@@ -3793,6 +4066,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.nodes = [client];
     this.connections = [];
     this.annotations = [];
+    this.network = emptyCanvasNetwork();
     this.packets = [];
     this.clearSelection();
     this.afterGraphMutated();
@@ -3856,9 +4130,13 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Deep-clone the current canvas into a snapshot. */
   private snapshotState(): CanvasSnapshot {
     return {
+      region: this.globalRegion,
+      currency: this.globalCurrency,
+      projectName: this.projectName,
       nodes: JSON.parse(JSON.stringify(this.nodes)),
       connections: JSON.parse(JSON.stringify(this.connections)),
       annotations: JSON.parse(JSON.stringify(this.annotations)),
+      network: this.network,
     };
   }
 
@@ -3869,6 +4147,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
    * undo entry instead of dozens.
    */
   private pushHistory(coalesceKey?: string): void {
+    this.canvasRevision++;
     // Any edit that records history makes the active canvas unsaved (orange dot).
     const activeTab = this.tabs[this.activeTabIndex];
     if (activeTab) activeTab.dirty = true;
@@ -3877,13 +4156,22 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Clear history — used when loading a project or switching canvas tabs. */
   private resetHistory(): void {
+    this.canvasRevision++;
     this.history.clear();
   }
 
   private applySnapshot(snap: CanvasSnapshot): void {
+    this.canvasRevision++;
+    this.globalCurrency = snap.currency;
+    this.projectName = snap.projectName;
+    if (this.globalRegion !== snap.region) {
+      this.globalRegion = snap.region;
+      this.loadRegionCost(snap.region);
+    }
     this.nodes = snap.nodes.map((n) => ({ ...n, selected: false }));
     this.connections = [...snap.connections];
     this.annotations = snap.annotations.map((a) => ({ ...a, selected: false }));
+    this.network = snap.network;
     this.selectedNodeIds = [];
     this.selectedConnectionIds = [];
     this.packets = [];
@@ -3995,7 +4283,9 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private applyProject(project: ArchitectureProject): void {
+    const network = validateCanvasNetwork(project.network, project.nodes);
     this.mcp.disconnect();
+    this.closeNetworkEditor();
     this.projectName = project.name;
     this.globalCurrency = project.currency || 'USD';
     this.globalRegion = project.region || 'us-east-1';
@@ -4013,6 +4303,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     });
     this.connections = project.connections;
     this.annotations = project.annotations || [];
+    this.network = network;
     this.packets = [];
     this.clearSelection();
     this.resetHistory();
@@ -4038,6 +4329,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
           nodes: [...this.nodes],
           connections: [...this.connections],
           annotations: [...this.annotations],
+          network: this.network,
           packets: [],
           selectedNodeIds: [],
           selectedConnectionIds: [],
@@ -4059,6 +4351,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       tab.nodes = [...this.nodes];
       tab.connections = [...this.connections];
       tab.annotations = [...this.annotations];
+      tab.network = this.network;
       tab.packets = [];
       tab.selectedNodeIds = [];
       tab.selectedConnectionIds = [];
@@ -4080,6 +4373,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
     tab.nodes = [...this.nodes];
     tab.connections = [...this.connections];
     tab.annotations = [...this.annotations];
+    tab.network = hasCanvasNetwork(this.network) ? this.network : undefined;
     tab.packets = [...this.packets];
     tab.selectedNodeIds = [...this.selectedNodeIds];
     tab.selectedConnectionIds = [...this.selectedConnectionIds];
@@ -4094,12 +4388,14 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   loadTabState(index: number): void {
     this.mcp.disconnect();
+    this.closeNetworkEditor();
     this.activeTabIndex = index;
     const tab = this.tabs[index];
     this.projectName = tab.projectName;
     this.nodes = [...tab.nodes];
     this.connections = [...tab.connections];
     this.annotations = [...tab.annotations];
+    this.network = tab.network ?? emptyCanvasNetwork();
     this.packets = [...tab.packets];
     this.selectedNodeIds = [...tab.selectedNodeIds];
     this.selectedConnectionIds = [...tab.selectedConnectionIds];
@@ -4227,6 +4523,7 @@ export class SimulatorComponent implements OnInit, AfterViewInit, OnDestroy {
       nodes: this.nodes,
       connections: this.connections,
       annotations: this.annotations,
+      ...(hasCanvasNetwork(this.network) && { network: this.network }),
       currency: this.globalCurrency,
       region: this.globalRegion,
       updatedAt: new Date().toISOString(),

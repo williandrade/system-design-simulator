@@ -7,6 +7,8 @@ import {
   SimulationMode,
 } from './architecture.model';
 import type { PersistedTab } from '../services/project-storage.service';
+import type { CanvasNetwork } from './canvas-network.model';
+import { hasCanvasNetwork } from '../utils/canvas-network';
 
 export interface CanvasTab {
   id: string;
@@ -15,6 +17,7 @@ export interface CanvasTab {
   nodes: ArchitectureNode[];
   connections: ArchitectureConnection[];
   annotations: Annotation[];
+  network?: CanvasNetwork;
   packets: DataPacket[];
   selectedNodeIds: string[];
   selectedConnectionIds: string[];
@@ -32,6 +35,11 @@ const DEFAULT_CURRENCY: Currency = 'USD';
 const DEFAULT_REGION = 'us-east-1';
 const DEFAULT_PAN = { x: 40, y: 40 };
 
+export function hasTabContent(tab: Partial<Pick<CanvasTab, 'nodes' | 'connections' | 'annotations' | 'network'>>): boolean {
+  return Boolean(tab.nodes?.length || tab.connections?.length || tab.annotations?.length ||
+    (tab.network && hasCanvasNetwork(tab.network)));
+}
+
 export function toPersistedTab(tab: CanvasTab): PersistedTab {
   return {
     id: tab.id,
@@ -40,6 +48,7 @@ export function toPersistedTab(tab: CanvasTab): PersistedTab {
     nodes: tab.nodes,
     connections: tab.connections,
     annotations: tab.annotations,
+    ...(tab.network && { network: tab.network }),
     currency: tab.globalCurrency,
     region: tab.globalRegion,
   };
@@ -53,6 +62,7 @@ export function fromPersistedTab(tab: PersistedTab, index: number, defaultZoom: 
     nodes: tab.nodes || [],
     connections: tab.connections || [],
     annotations: tab.annotations || [],
+    ...(tab.network && { network: tab.network }),
     packets: [],
     selectedNodeIds: [],
     selectedConnectionIds: [],

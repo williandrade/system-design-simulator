@@ -3,6 +3,7 @@ import { ProjectStorageService, PersistedWorkspace } from './project-storage.ser
 import { ArchitectureProject } from '../models/architecture.model';
 import { makeConn, makeNode } from '../testing/fixtures';
 import { hasValidGenericServiceMetadata } from '../utils/generic-service-metadata';
+import type { CanvasNetwork } from '../models/canvas-network.model';
 
 class MemoryStorage {
   private store = new Map<string, string>();
@@ -42,6 +43,11 @@ const workspace: PersistedWorkspace = {
 };
 
 const generic = makeNode('billing', 'generic');
+const network: CanvasNetwork = {
+  frames: [{ id: 'vpc', kind: 'vpc', name: 'Prod', x: 0, y: 0, width: 300, height: 200 }],
+  arrows: [],
+  nodeParents: { [generic.id]: 'vpc' },
+};
 const genericWithMetadata = {
   ...generic,
   genericMetadata: {
@@ -89,6 +95,12 @@ describe('ProjectStorageService', () => {
 
     it('returns null when no project is stored', () => {
       expect(service.loadLocal()).toBeNull();
+    });
+
+    it('recovers a project with corrupt optional network data', () => {
+      const stored = { ...project, nodes: [generic], network: { ...network, frames: null } };
+      localStorage.setItem('aws-system-design-simulator-project', JSON.stringify(stored));
+      expect(service.loadLocal()).toEqual({ ...project, nodes: [generic] });
     });
 
     it('returns null (does not throw) when the stored project JSON is corrupt', () => {
@@ -152,6 +164,15 @@ describe('ProjectStorageService', () => {
 
     it('returns null when no workspace is stored', () => {
       expect(service.loadWorkspace()).toBeNull();
+    });
+
+    it('recovers a corrupt tab network while preserving a healthy network in another tab', () => {
+      const cleanTab = { ...workspace.tabs[0], id: 't2', nodes: [generic], network };
+      const invalidTab = { ...workspace.tabs[0], network };
+      localStorage.setItem('aws-system-design-simulator-workspace', JSON.stringify({
+        ...workspace, tabs: [invalidTab, cleanTab],
+      }));
+      expect(service.loadWorkspace()).toEqual({ ...workspace, tabs: [workspace.tabs[0], cleanTab] });
     });
 
     it('returns null (does not throw) when the stored workspace JSON is corrupt', () => {

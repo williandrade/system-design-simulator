@@ -1,3 +1,5 @@
+import type { CanvasNetwork } from './canvas-network.model';
+
 export type AwsServiceType =
   | 'generic'
   | 'client'
@@ -247,6 +249,7 @@ export interface ArchitectureProject {
   nodes: ArchitectureNode[];
   connections: ArchitectureConnection[];
   annotations?: Annotation[];
+  network?: CanvasNetwork;
   currency: Currency;
   region?: string;
   updatedAt: string;
